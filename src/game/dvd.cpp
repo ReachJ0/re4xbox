@@ -301,6 +301,9 @@ struct OSLowMem {
 
 #include "snd.h"
 #include <stdio.h>
+#ifdef RE4_XBOX
+#include "xbox/xdvd.h"
+#endif
 #include <string.h>
 #include <dolphin/os/OSCache.h>
 #include <dolphin/os/OSMemory.h>
@@ -1074,7 +1077,13 @@ void cAram::DmaTrans(cAramQueue* pQueue, int mode)
     DCFlushRange((void*) (pQueue->type == 0 ? pQueue->src : pQueue->dst), pQueue->len);
     ARQPostRequest(&ArqReq, (u32) pQueue, pQueue->type, 1, pQueue->src, pQueue->dst, pQueue->len, aram_cb);
     if (mode & 1) {
+#ifdef RE4_XBOX
+        while (pQueue->CkFlag(0x04000000) == 0) {
+            XDvd_Pump();  // the DMA callback is delivered by the pump, not by an interrupt
+        }
+#else
         while (pQueue->CkFlag(0x04000000) == 0) {}
+#endif
         pQueue->PushQueue();
     }
 }

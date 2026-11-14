@@ -1,5 +1,8 @@
 // game/snd_main: sound driver core (Capcom sound library, -O0). Its audio-frame callback runs the ISS
 // voice manager, stream player and MIDI sequencer every 5 ms.
+#ifdef RE4_XBOX
+#include "xbox/xdvd.h"
+#endif
 #include "snd_drv.h"
 
 u8 zero_tbl[0x100] __attribute__((aligned(32)));
@@ -67,6 +70,9 @@ void zero_buff_clear(void)
         if (ctrl->arq_flag == 0) {
             break;
         }
+#ifdef RE4_XBOX
+        XDvd_Pump();  // the ARQ callback is delivered by the pump, not by an interrupt
+#endif
     }
 }
 
