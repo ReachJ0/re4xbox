@@ -39,7 +39,11 @@ struct OSLowMem {
 #undef OS_TIMER_CLOCK
 #undef OSTicksToSeconds
 #undef OSTicksToMicroseconds
+#ifdef RE4_XBOX
+#define OS_BUS_CLOCK __OSBusClock  // no GameCube low memory on the Xbox
+#else
 #define OS_BUS_CLOCK (((OSLowMem*) 0x80000000)->busClock)
+#endif
 #define OS_TIMER_CLOCK (OS_BUS_CLOCK / 4)
 #define OSTicksToSeconds(ticks) ((ticks) / OS_TIMER_CLOCK)
 #define OSTicksToMicroseconds(ticks) (((ticks) * 8) / (OS_TIMER_CLOCK / 125000))

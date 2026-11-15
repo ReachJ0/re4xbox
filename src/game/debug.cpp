@@ -56,7 +56,11 @@ int g_proc_cnt;
 // into `lis 0x8000` + displacement. Replaces the SDK macro of the same name (dvd.cpp / main_sub.cpp
 // too; each unit's override has to follow its own <dolphin/os.h>, so it is not in a header).
 #undef OS_BUS_CLOCK
+#ifdef RE4_XBOX
+#define OS_BUS_CLOCK __OSBusClock  // no GameCube low memory on the Xbox
+#else
 #define OS_BUS_CLOCK (((OSLowMem*) 0x80000000)->busClock)
+#endif
 struct OSLowMem {
     u8 pad_0[0xF8];
     u32 busClock;   // 0xF8
@@ -147,7 +151,13 @@ void processBarDisp()
     // stands in for it (its read below folds back to `li 0`, no code).
     s16 zz = 0;
     // clk's `lis 0x8000` (a block-0 filler at sched1) follows the zero's `li` in the target: LUID order.
+#ifdef RE4_XBOX
+    static OSLowMem xlow;
+    xlow.busClock = __OSBusClock;
+    clk = &xlow;
+#else
     clk = (OSLowMem*) 0x80000000;
+#endif
     t->code = 4;
     t->x0 = 6;
     t->y0 = 30;

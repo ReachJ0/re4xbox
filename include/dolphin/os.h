@@ -72,6 +72,10 @@ u16 __OSWirelessPadFixMode AT_ADDRESS(OS_BASE_CACHED | 0x30E0);
 OSThread* __gUnkThread1 AT_ADDRESS(OS_BASE_CACHED | 0x00D8);
 int __gUnknown800030C0[2] AT_ADDRESS(OS_BASE_CACHED | 0x30C0);
 u8 __gUnknown800030E3 AT_ADDRESS(OS_BASE_CACHED | 0x30E3);
+#elif defined(RE4_XBOX)
+// no GameCube low memory on the Xbox: the clocks are ordinary globals (src/xbox/os_xbox.cpp)
+extern u32 __OSBusClock;
+extern u32 __OSCoreClock;
 #else
 #define __OSBusClock  (*(u32 *)(OS_BASE_CACHED | 0x00F8))
 #define __OSCoreClock (*(u32 *)(OS_BASE_CACHED | 0x00FC))
