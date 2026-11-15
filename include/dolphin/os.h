@@ -76,6 +76,9 @@ u8 __gUnknown800030E3 AT_ADDRESS(OS_BASE_CACHED | 0x30E3);
 // no GameCube low memory on the Xbox: the clocks are ordinary globals (src/xbox/os_xbox.cpp)
 extern u32 __OSBusClock;
 extern u32 __OSCoreClock;
+extern OSThreadQueue __OSActiveThreadQueue;
+extern OSThread* __OSCurrentThread;
+extern OSThread* __gUnkThread1;
 #else
 #define __OSBusClock  (*(u32 *)(OS_BASE_CACHED | 0x00F8))
 #define __OSCoreClock (*(u32 *)(OS_BASE_CACHED | 0x00FC))

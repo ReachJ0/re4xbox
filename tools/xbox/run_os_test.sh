@@ -3,7 +3,8 @@
 # Needs only a C and a C++ compiler; no Xbox toolchain or game assets.
 #   usage: tools/xbox/run_os_test.sh     (CC / CXX override the compilers; EXTRA adds flags, e.g. sanitizers)
 #
-# The layer is linked with the SDK files it reuses as they are (OSAlloc.c, OSArena.c, OSStopwatch.c). The SDK's
+# The layer is linked with the SDK files it reuses as they are (OSAlloc.c, OSArena.c, OSStopwatch.c, and the
+# thread files OSInit now starts: OSThread.c, OSMutex.c, OSSemaphore.c). The SDK's
 # calendar functions are cut out of src/lib/OSTime.c and built under other names as the reference; the rest of
 # that file is PowerPC assembly and does not build here.
 set -eu
@@ -38,13 +39,13 @@ grep -q 'OSCalendarTimeToTicks' "$OUT/orig_time.c" || { echo "could not extract 
 "$CC" -c -w -std=gnu99 -DRE4_XBOX -I "$OUT/inc" -I "$ROOT/include" \
     -DOSTicksToCalendarTime=orig_OSTicksToCalendarTime -DOSCalendarTimeToTicks=orig_OSCalendarTimeToTicks \
     "$OUT/orig_time.c" -o "$OUT/orig.o"
-for f in OSAlloc OSArena OSStopwatch; do
-    "$CC" -c -w -std=gnu99 -DRE4_XBOX -I "$OUT/inc" -I "$ROOT/include" "$ROOT/src/lib/$f.c" -o "$OUT/$f.o"
+for f in OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore; do
+    "$CC" -c -w -D__declspec'(x)=' -Dasm= -std=gnu99 -no-pie -fno-pie -D__cntlzw=xos_cntlzw -DRE4_XBOX -I "$OUT/inc" -I "$ROOT/include" -I "$ROOT/src/lib" "$ROOT/src/lib/$f.c" -o "$OUT/$f.o"
 done
 
-"$CXX" -std=gnu++11 -Wall -Wextra -Wno-unused-parameter $EXTRA -DRE4_XBOX -I "$OUT/inc" -I "$ROOT/include" \
-    "$ROOT/tools/xbox/os_test.cpp" "$ROOT/src/xbox/os_xbox.cpp" "$OUT/orig.o" \
-    "$OUT/OSAlloc.o" "$OUT/OSArena.o" "$OUT/OSStopwatch.o" -o "$OUT/os_test" 2>&1 | grep -E 'tools/xbox|src/xbox|error|undefined' || true
+"$CXX" -std=gnu++11 -Wall -Wextra -Wno-unused-parameter -no-pie -fno-pie $EXTRA -DRE4_XBOX -I "$OUT/inc" -I "$ROOT/include" \
+    "$ROOT/tools/xbox/os_test.cpp" "$ROOT/src/xbox/os_xbox.cpp" "$ROOT/src/xbox/thread_xbox.cpp" "$ROOT/src/xbox/xthread_backend_sys.cpp" "$OUT/orig.o" \
+    "$OUT/OSAlloc.o" "$OUT/OSArena.o" "$OUT/OSStopwatch.o" "$OUT/OSThread.o" "$OUT/OSMutex.o" "$OUT/OSSemaphore.o" -lpthread -o "$OUT/os_test" 2>&1 | grep -E 'tools/xbox|src/xbox|error|undefined' || true
 [ -x "$OUT/os_test" ] || { echo "build failed" >&2; exit 1; }
 
 timeout ${TEST_TIMEOUT:-30} "$OUT/os_test"

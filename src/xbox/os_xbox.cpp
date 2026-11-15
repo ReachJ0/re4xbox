@@ -46,6 +46,8 @@
 
 extern "C" {
 
+void XOs_ThreadInit(void);  // thread_xbox.cpp
+
 u32 __OSBusClock = BUS_CLOCK;
 u32 __OSCoreClock = CORE_CLOCK;
 OSErrorHandler __OSErrorTable[17];
@@ -142,9 +144,13 @@ void OSInit(void)
         OSPanic(__FILE__, __LINE__, "OSInit(): no memory for the arena");
     }
     s_arena = 1;
+    XOs_ThreadInit();
     OSSetArenaLo(block);
     OSSetArenaHi((u8*) block + ARENA_SIZE);
 }
+
+// The game only initializes the alarm list; nothing sets an alarm.
+void OSInitAlarm(void) {}
 
 u32 OSGetConsoleType(void) { return CONSOLE_TYPE_RETAIL; }
 
