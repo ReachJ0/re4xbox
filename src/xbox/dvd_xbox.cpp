@@ -43,7 +43,7 @@
 // DVDGetFSTLocation: where the SDK leaves the file system table, near the top of the 24 MB of RAM. The
 // game only subtracts 0x80000000 from it to size its heap (cDvd::FstSize), so any plausible address will
 // do until the OS layer decides the memory map.
-#define FST_ADDRESS 0x81700000u
+#define FST_ADDRESS XMEM_ADDR(0x81700000u)
 
 #define CB_CALLBACK_CANCELED_WAITING (-3)
 

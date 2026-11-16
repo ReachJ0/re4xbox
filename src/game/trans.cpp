@@ -80,8 +80,8 @@ struct cWeight {
     u8 padding;      // 0x07
 };
 
-#define PTR_INVALID(p) ((s32) (p) >= 0 || (u32) (p) > 0x82FFFFFF)
-#define PTR_INVALID2(p) ((u32) (p) - 0x80000000 > 0x02FFFFFF)
+#define PTR_INVALID(p) (XMEM_SGE0(p) || XMEM_GT(p))
+#define PTR_INVALID2(p) (XMEM_SUB_GT(p))
 
 // u8 -> f32 through GQR2 straight from memory: the compiler only emits psq_l from a stack slot.
 #define PSQ_L_U8(p) ({ f32 f_; asm volatile("psq_l %0,0(%1),1,2" : "=f"(f_) : "b"(p) : "memory"); f_; })
@@ -2567,7 +2567,7 @@ void CalcTplAddrC8(TEXPalette* tpl)
     if (tpl == 0) {
         return;
     }
-    if ((s32) tpl->descriptorArray < 0) {
+    if (XMEM_ISPTR(tpl->descriptorArray)) {
         return;
     }
     tpl->descriptorArray = (TEXDescriptor*) ((u32) tpl->descriptorArray + (u32) tpl);

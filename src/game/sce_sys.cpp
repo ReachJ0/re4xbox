@@ -149,7 +149,7 @@ SCE_TASK* scenarioGetOtAddr(SCE_TASK* pSceOt)
     u32 tag;
 
     while ((tag = pSceOt->tag) != 0xFFFFFFFF) {
-        pSceOt = (SCE_TASK*) (tag | 0x80000000);
+        pSceOt = (SCE_TASK*) XMEM_TAG(tag);
         if ((s32) tag < 0) {
             return pSceOt;
         }
@@ -450,7 +450,7 @@ void SceExecCheckCondition()
         return;
     }
     do {
-        c = (SCE_EXEC_PRIM*) (v | 0x80000000);
+        c = (SCE_EXEC_PRIM*) XMEM_TAG(v);
         if ((s32) v < 0) {
             if (SceExecCheckCondition_sub(c) == 1) {
                 if (c->func != 0) {

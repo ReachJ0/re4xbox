@@ -326,8 +326,8 @@ struct DvdSndStrWork {
 };
 extern DvdSndStrWork Snd_str_work[4];   // game/snd_ram.cpp SND_STR Snd_str_work[SND_STR_MAX], seen through the view struct above
 
-#define DVD_BUFF ((void*) 0x80350000)
-#define DVD_BUFF2 ((void*) 0x80360000)
+#define DVD_BUFF ((void*) XMEM_ADDR(0x80350000))
+#define DVD_BUFF2 ((void*) XMEM_ADDR(0x80360000))
 
 // status field of cDvdQueue::flag
 enum {
@@ -1161,7 +1161,7 @@ void cDvd::Init()
     ReadID = 1;
     OSReport("FST Address = 0x%8x\n", DVDGetFSTLocation());
     size = OSGetConsoleSimulatedMemSize();
-    fst = (u32) DVDGetFSTLocation() - 0x80000000;
+    fst = XMEM_OFF(DVDGetFSTLocation());
     FstSize = size - fst;
 }
 
@@ -1988,9 +1988,9 @@ int cDvd::GetDiscNo()
 void RomFontSetting()
 {
     if (OSGetFontEncode() == 1) {
-        pG->FontData = (void*) 0x816D3100;
+        pG->FontData = (void*) XMEM_ADDR(0x816D3100);
     } else {
-        pG->FontData = (void*) 0x817D3EE0;
+        pG->FontData = (void*) XMEM_ADDR(0x817D3EE0);
     }
     OSInitFont((OSFontHeader*) pG->FontData);
 }

@@ -24,7 +24,7 @@ printf '#include <string.h>\n#include <dolphin/types.h>\n#define ASSERTMSGLINE(.
     "$ROOT/src/lib/dvdidutils.c" -o "$OUT/orig.o"
 
 "$CXX" -std=gnu++11 -Wall -Wextra -Wno-unused-variable -Wno-unused-but-set-variable $EXTRA -DRE4_XBOX -I "$ROOT/include" \
-    "$ROOT/tools/xbox/dvd_test.cpp" "$ROOT/src/xbox/dvd_xbox.cpp" "$ROOT/src/xbox/ar_xbox.cpp" "$OUT/orig.o" \
+    "$ROOT/tools/xbox/dvd_test.cpp" "$ROOT/src/xbox/dvd_xbox.cpp" "$ROOT/src/xbox/ar_xbox.cpp" "$ROOT/src/xbox/xmem_xbox.cpp" "$OUT/orig.o" \
     -o "$OUT/dvd_test" 2>&1 | grep -E 'tools/xbox|src/xbox|error' || true
 [ -x "$OUT/dvd_test" ] || { echo "build failed" >&2; exit 1; }
 
@@ -32,7 +32,7 @@ printf '#include <string.h>\n#include <dolphin/types.h>\n#define ASSERTMSGLINE(.
 
 # the stdio backend on a real folder, with the layer on top
 "$CXX" -std=gnu++11 -Wall -Wextra $EXTRA -DRE4_XBOX -I "$ROOT/include" \
-    "$ROOT/tools/xbox/dvd_file_test.cpp" "$ROOT/src/xbox/dvd_xbox.cpp" "$ROOT/src/xbox/ar_xbox.cpp" \
+    "$ROOT/tools/xbox/dvd_file_test.cpp" "$ROOT/src/xbox/dvd_xbox.cpp" "$ROOT/src/xbox/ar_xbox.cpp" "$ROOT/src/xbox/xmem_xbox.cpp" \
     "$ROOT/src/xbox/xdvd_backend_file.cpp" -o "$OUT/dvd_file_test" 2>&1 | grep -E 'tools/xbox|src/xbox|error' || true
 [ -x "$OUT/dvd_file_test" ] || { echo "build failed (file backend test)" >&2; exit 1; }
 "$OUT/dvd_file_test"

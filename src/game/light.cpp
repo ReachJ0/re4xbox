@@ -24,7 +24,7 @@ extern u8 max_lod;
 extern f32 lod_bias;
 
 // pointer to game memory (0x80000000 .. 0x82FFFFFF)
-#define IN_RANGE(p) ((u32) (p) - 0x80000000 <= 0x02FFFFFF)
+#define IN_RANGE(p) (XMEM_SUB_LE(p))
 
 void funcDelCtrl(cCtrl* pCtr);
 

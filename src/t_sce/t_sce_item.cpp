@@ -1159,7 +1159,7 @@ static void tSceItemDataInput_item_ETedit()
         it->open_ang = pW->editArea.eye_trigger.open_ang;
         it->ang_x = pW->editArea.eye_trigger.ang_x;
         it->ang_y = pW->editArea.eye_trigger.ang_y;
-        if (!((u32) it->pModel < 0x80000000 || (u32) it->pModel > 0x82FFFFFF)) {
+        if (!(XMEM_LT(it->pModel) || XMEM_GT(it->pModel))) {
             if (it->open_ang > 0.0f) {
                 it->pModel->ang.x = it->ang_x;
                 it->pModel->ang.y = it->ang_y;

@@ -12,7 +12,7 @@ void* mem_calloc(u32 size, const char* file, int line, int a, int b);
 #define MEM_CALLOC(size, a, b) mem_calloc(size, __FILE__, __LINE__, a, b)
 
 // Address inside the console main memory (MEM1: 0x80000000 to 0x82FFFFFF).
-#define VALID_PTR(p) ((u32) (p) >= 0x80000000 && (u32) (p) <= 0x82FFFFFF)
+#define VALID_PTR(p) (XMEM_GE(p) && XMEM_LE(p))
 // Size / address rounded up to the 32-byte DMA and cache-line unit.
 #define ALIGN32(x) (((x) + 0x1F) & ~0x1F)
 

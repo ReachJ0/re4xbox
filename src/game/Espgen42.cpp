@@ -511,7 +511,7 @@ void Espgen42_Move00(cEspgen* pGen)
     if (tex == NULL) {
         return;
     }
-    noise = (u8*) GXGetTexObjData(tex) + 0x80000000;
+    noise = (u8*) XMEM_FROM_OFF((u32) GXGetTexObjData(tex));
     u32 nx = p->Width;
     u32 ny = p->Height;
     f32 hx = (f32) (int) (nx / 2);

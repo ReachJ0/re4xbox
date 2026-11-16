@@ -26,7 +26,7 @@ void ToolLight()
     TutilInitDefault();
     tool = new cLightTool;
     Block.dispAllBlock(1);
-    if ((u32) tool >= 0x80000000 && (u32) tool <= 0x82FFFFFF) {
+    if (XMEM_GE(tool) && XMEM_LE(tool)) {
         int ret;
 
         DbgFlagOn(pG, DBG_BACK_CLIP);

@@ -581,7 +581,7 @@ static void edit_name()
     name = pWork->nameTbl[pWork->top + pWork->row];
     // exits by goto: a `break` would let expand_end_loop rotate the range test to the bottom
     while (1) {
-        if ((u32) name >= 0x80000000 && (u32) name <= 0x82FFFFFF) {
+        if (XMEM_GE(name) && XMEM_LE(name)) {
             if (i >= 0) {
                 eprintf(0x68, y, 0, 0, "%s", name);
             }
@@ -939,7 +939,7 @@ static void edit_litmask()
         pWork->sub2 = 1;
     }
     eprintf(0x40, 0x8C, 4, 0, "MODEL PROPATY");
-    if ((u32) LightMgr.at(pWork->id) >= 0x80000000 && (u32) LightMgr.at(pWork->id) <= 0x82FFFFFF &&
+    if (XMEM_GE(LightMgr.at(pWork->id)) && XMEM_LE(LightMgr.at(pWork->id)) &&
         (LightMgr.at(pWork->id)->be_flag & 1)) {
         eprintf(0x40, 0x9A, 0, 0, "LIGHT-%02d %s", pWork->id,
                 (obj->LightInfo.SelectMask & (1 << pWork->id)) ? "ENABLE" : "DISABLE");
@@ -1488,7 +1488,7 @@ static void texture()
     }
     eprintf(0x20, 0x38, 0, 0, "NO %d", pWork->sub);
     tpl = SmdGetTplPtr(pWork->sub);
-    if ((u32) tpl - 0x80000000 <= 0x02FFFFFF) {
+    if (XMEM_SUB_LE(tpl)) {
         DrawTpl((TEXPalette*) tpl, 0x32, 0x32, 0xC8, 0xC8);
     }
     if (pWork->joy[0].rep & 0x200) {
@@ -1874,7 +1874,7 @@ static void printEditTable()
             // outranks `no+1` (10 refs/144) for r25. The codeless insn restores the count (39 vs 145).
             asm volatile("");
             n = pWork->nameTbl[no];
-            if ((u32) n >= 0x80000000 && (u32) n <= 0x82FFFFFF) {
+            if (XMEM_GE(n) && XMEM_LE(n)) {
                 strncpy(name, n, 7);
             }
             name[7] = 0;

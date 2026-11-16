@@ -299,7 +299,7 @@ CAM_FILE_HEADER* CameraControl::calcAddr(u8* head)
 
     rec = (CUT_INFO*) (pBuff + 1);
     for (i = 0; i < pBuff->nAdat; i++, rec++) {
-        if ((s32) rec->pAdat < 0) {
+        if (XMEM_ISPTR(rec->pAdat)) {
             return pBuff;
         }
         rec->pAdat = (AREA_DATA*) ((u32) rec->pAdat + (u32) pBuff);

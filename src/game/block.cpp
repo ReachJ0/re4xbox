@@ -40,7 +40,7 @@ u32* cBlock::getOtAddr()
     u32 v;
 
     while ((v = *pOt) != 0xFFFFFFFF) {
-        pOt = (u32*) (v | 0x80000000);
+        pOt = (u32*) XMEM_TAG(v);
         if ((s32) v < 0) {
             return pOt;
         }

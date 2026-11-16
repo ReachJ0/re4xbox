@@ -36,8 +36,11 @@ void XOsBackend_Reset(int kind);
 // 1 while the player holds the console's reset gesture, else 0.
 int XOsBackend_ResetButton(void);
 
-// A block of `size` bytes aligned to 32 for the game's "main memory" (heaps are carved from it), or NULL.
-void* XOsBackend_AllocMain(unsigned int size);
+// The block of `size` bytes, zeroed and aligned to 32, that plays the game's "main memory" (xbox/xmem.h).
+// The backend maps it at `wanted` when it can (the game tells file offsets from pointers by size, so the
+// block must sit far above any offset) and anywhere else when it cannot; the caller checks the address.
+// NULL when there is no memory.
+void* XOsBackend_AllocMain(unsigned int size, unsigned int wanted);
 
 #ifdef __cplusplus
 }

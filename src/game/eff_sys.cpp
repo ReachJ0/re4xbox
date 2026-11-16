@@ -551,7 +551,7 @@ static void EspCalcTplAddr(TEXPalette* tpl)
     if (tpl == NULL) {
         return;
     }
-    if ((s32) tpl->descriptorArray < 0) {
+    if (XMEM_ISPTR(tpl->descriptorArray)) {
         return;
     }
     tpl->descriptorArray = (TEXDescriptor*) ((u32) tpl->descriptorArray + (u32) tpl);

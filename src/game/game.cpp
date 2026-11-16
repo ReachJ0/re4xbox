@@ -1530,7 +1530,7 @@ void primInit()
         pG->nPrim = pG->nPrim / 2;
 #line 2215 "D:/Bio4/Prog/game.cpp"
         (pG->prim_cnt = (s32) MEM_ALLOC(pG->nPrim * 2, 1, 13));
-        if ((u32) pG->prim_cnt < 0x80000000 || (u32) pG->prim_cnt > 0x82FFFFFF) {
+        if (XMEM_LT(pG->prim_cnt) || XMEM_GT(pG->prim_cnt)) {
             pLog->err(0, 0, "workInit() PRIM BUFFER SIZE WAS REDUCE %08X", pG->nPrim);
         }
     } while (pG->prim_cnt == 0);
@@ -1835,7 +1835,7 @@ int cManager<T>::dispWorkNum(int x, int y, int col, int sub)
     u32 n;
     u32 i;
 
-    if ((u32) pArray < 0x80000000 || (u32) pArray > 0x82FFFFFF) {
+    if (XMEM_LT(pArray) || XMEM_GT(pArray)) {
         return 0;
     }
     n = 0;

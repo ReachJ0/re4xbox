@@ -28,7 +28,7 @@ void* GetDataExt(void* arc, const char* tag, int no);
 
 
 #define SND_FILE "D:/Bio4/Prog/snd.cpp"
-#define SND_DATA_TOP 0x80370000
+#define SND_DATA_TOP XMEM_ADDR(0x80370000)
 #define LOOP_IDX(x, max) ((x) < 0 ? (max) : ((x) > (max) ? 0 : (x)))
 
 SND_WORK Snd;

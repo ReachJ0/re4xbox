@@ -327,7 +327,7 @@ SCE_AT_DATA* sceAtGetOtAddr(SCE_AT_DATA* p)
     u32 v;
 
     while ((v = p->tag) != 0xFFFFFFFF) {
-        p = (SCE_AT_DATA*) (v | 0x80000000);
+        p = (SCE_AT_DATA*) XMEM_TAG(v);
         if ((s32) v < 0) {
             return p;
         }

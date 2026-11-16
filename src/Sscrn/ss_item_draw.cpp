@@ -90,32 +90,32 @@ void ss_Draw_tpl_local(TEXPalette* tpl, u32 id, int x, int y, int w, int h)
     TEXHeader* th;
 
     // main-memory range checks (the sub screen's data lives in the ARAM-swapped area)
-    if ((u32) tpl - 0x80000000 > 0x02FFFFFF) {
+    if (XMEM_SUB_GT(tpl)) {
         return;
     }
     calcTplAddr(tpl);
     d = TEXGet(tpl, id);
-    if ((u32) d < 0x80000000) {
+    if (XMEM_LT(d)) {
         return;
     }
-    if ((u32) d > 0x82FFFFFF) {
+    if (XMEM_GT(d)) {
         return;
     }
     th = d->textureHeader;
-    if ((u32) th < 0x80000000) {
+    if (XMEM_LT(th)) {
         return;
     }
-    if ((u32) th > 0x82FFFFFF) {
+    if (XMEM_GT(th)) {
         return;
     }
     if (th->format == 8 || th->format == 9) {
         CLUTHeader* ch;
         GXInitTexObjCI(&tex, th->data, th->width, th->height, th->format, 0, 0, 0, 0);
         ch = d->CLUTHeader;
-        if ((u32) ch < 0x80000000) {
+        if (XMEM_LT(ch)) {
             return;
         }
-        if ((u32) ch > 0x82FFFFFF) {
+        if (XMEM_GT(ch)) {
             return;
         }
         GXInitTlutObj(&tlut, ch->data, ch->format, ch->numEntries);

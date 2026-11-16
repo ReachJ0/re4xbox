@@ -57,4 +57,6 @@ typedef int BOOL;
 #undef fabsf
 #endif
 
+#include "xbox/xmem.h"
+
 #endif

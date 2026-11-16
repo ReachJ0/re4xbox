@@ -38,7 +38,7 @@ void DelPrim(u32* pOt, u32* pWk)
             *pOt = *p;
             return;
         }
-        pOt = (u32*) (*pOt | 0x80000000);
+        pOt = (u32*) XMEM_TAG(*pOt);
     } while (*pOt != 0xFFFFFFFF);
 }
 
@@ -49,7 +49,7 @@ void ClearOTagR(u32* pOt, int n)
 
     *pOt = 0xFFFFFFFF;
     for (i = 0; i < n - 1; i++) {
-        pOt[1] = (u32) pOt & 0x7FFFFFFF;
+        pOt[1] = XMEM_TAGOF(pOt);
         pOt++;
     }
 }
@@ -89,7 +89,7 @@ void DrawOTag(u32* pOt)
         if ((s32) p < 0) {
             tbl[p[1] & 0x1F]((u32) p);
         }
-        pOt = (u32*) (*pOt | 0x80000000);
+        pOt = (u32*) XMEM_TAG(*pOt);
     } while (*pOt != 0xFFFFFFFF);
 }
 

@@ -81,7 +81,7 @@ OtData* MakeOtData(void* data)
 {
     OtPrim* p = (OtPrim*) GetPrimBuff(sizeof(OtPrim));
 
-    if ((u32) p < 0x80000000 || (u32) p > 0x82FFFFFF) {
+    if (XMEM_LT(p) || XMEM_GT(p)) {
         return 0;
     }
     p->data = data;

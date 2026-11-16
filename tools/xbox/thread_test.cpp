@@ -28,7 +28,7 @@ void XOsBackend_Log(const char* t) { fputs(t, stdout); }
 void XOsBackend_Halt(void) { printf("HALT\n"); abort(); }
 void XOsBackend_Reset(int) { abort(); }
 int XOsBackend_ResetButton(void) { return 0; }
-void* XOsBackend_AllocMain(unsigned int size) { void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0); return p == MAP_FAILED ? NULL : p; }
+void* XOsBackend_AllocMain(unsigned int size, unsigned int) { void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0); return p == MAP_FAILED ? NULL : p; }
 }
 
 static char g_log[512]; static int g_n;

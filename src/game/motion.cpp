@@ -218,7 +218,7 @@ void MotionSetCore(cModel* m, void* w_, void* data_, void* seq_, int hokan, int 
     tbl = (u32*) ((u32) w->pJoint_no + w->Joint_num);
     tbl = (u32*) (((u32) tbl + 3) & ~3);
     tbl++;
-    if ((s32) tbl[0] >= 0) {
+    if (XMEM_NOTPTR(tbl[0])) {
         for (i = 0; i < w->Joint_num; i++) {
             tbl[i] += (u32) w->pMot;
         }

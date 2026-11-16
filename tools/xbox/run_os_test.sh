@@ -44,7 +44,7 @@ for f in OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore; do
 done
 
 "$CXX" -std=gnu++11 -Wall -Wextra -Wno-unused-parameter -no-pie -fno-pie $EXTRA -DRE4_XBOX -I "$OUT/inc" -I "$ROOT/include" \
-    "$ROOT/tools/xbox/os_test.cpp" "$ROOT/src/xbox/os_xbox.cpp" "$ROOT/src/xbox/thread_xbox.cpp" "$ROOT/src/xbox/xthread_backend_sys.cpp" "$OUT/orig.o" \
+    "$ROOT/tools/xbox/os_test.cpp" "$ROOT/src/xbox/os_xbox.cpp" "$ROOT/src/xbox/xmem_xbox.cpp" "$ROOT/src/xbox/thread_xbox.cpp" "$ROOT/src/xbox/xthread_backend_sys.cpp" "$OUT/orig.o" \
     "$OUT/OSAlloc.o" "$OUT/OSArena.o" "$OUT/OSStopwatch.o" "$OUT/OSThread.o" "$OUT/OSMutex.o" "$OUT/OSSemaphore.o" -lpthread -o "$OUT/os_test" 2>&1 | grep -E 'tools/xbox|src/xbox|error|undefined' || true
 [ -x "$OUT/os_test" ] || { echo "build failed" >&2; exit 1; }
 

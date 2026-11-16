@@ -1037,7 +1037,7 @@ void R31bExecFallRoom(int no, f32 spd)
     for (i = 0; i < n; i++) {
         cObj* o = SmdGetGroupObjPtr(r31b_objTbl[no][i]);
 
-        if ((u32) o < 0x80000000 || (u32) o > 0x82FFFFFF) {
+        if (XMEM_LT(o) || XMEM_GT(o)) {
             pLog->err(0, 0, "R31bExecFallMainSub INVALID INDEX %d", r31b_objTbl[no][i]);
             return;
         }
@@ -1050,7 +1050,7 @@ void R31bExecFallRoom(int no, f32 spd)
     for (i = 0; i < m; i++) {
         cObj* o = SmdGetGroupObjPtr(r31b_kanaamiTbl[no][i]);
 
-        if ((u32) o < 0x80000000 || (u32) o > 0x82FFFFFF) {
+        if (XMEM_LT(o) || XMEM_GT(o)) {
             pLog->err(0, 0, "R31bExecFallMainSub INVALID INDEX %d", r31b_objTbl[no][i]);
             return;
         }

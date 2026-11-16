@@ -289,13 +289,13 @@ void excepLoadSymbol()
     }
     if (SubScreenWk.p_module) {
         OSModuleHeader* mod = SubScreenWk.p_module;
-        if ((s32) mod < 0 && (u32) mod <= 0x82FFFFFF && (s32) mod->info.sectionInfoOffset < 0) {
+        if (XMEM_ISPTR(mod) && XMEM_LE(mod) && XMEM_ISPTR(mod->info.sectionInfoOffset)) {
             symbol_err = excepLoadSymbolSub("Bio4.Sscrn.sym", mod);
         }
     }
     if (RoomData.getModulePtr()) {
         OSModuleHeader* mod = RoomData.getModulePtr();
-        if ((s32) mod < 0 && (u32) mod <= 0x82FFFFFF && (s32) mod->info.sectionInfoOffset < 0) {
+        if (XMEM_ISPTR(mod) && XMEM_LE(mod) && XMEM_ISPTR(mod->info.sectionInfoOffset)) {
             strcpy(buf, FileTbl[RoomData.m_RelNo].name + 4);
             *strchr(buf, '.') = 0;
             sprintf(tmp_str, "Bio4.%s.sym", buf);
@@ -366,12 +366,12 @@ void excepMemoryDumpMove(MemDump* w, int y)
             w->mode++;
         }
         if (Joy[0].rep & 0x80008) {
-            if (w->addr > 0x80000000) {
+            if (w->addr > XMEM_ADDR(0x80000000)) {
                 w->addr -= 0x10;
             }
         }
         if (Joy[0].rep & 0x40004) {
-            if (w->addr <= 0x817FFFEF) {
+            if (w->addr <= XMEM_ADDR(0x817FFFEF)) {
                 w->addr += 0x10;
             }
         }
@@ -543,8 +543,8 @@ void ErrorHandler(OSError error, OSContext* context, ...)
         } while (sp != 0 && sp != (u32*) -1 && i < 16);
     }
     nSymbolInfo = 0;
-    w->addr = 0x80400000;
-    w->curAddr = 0x80400000;
+    w->addr = XMEM_ADDR(0x80400000);
+    w->curAddr = XMEM_ADDR(0x80400000);
     pG->debug_mode = 1;
     excepRegConsoleDump(error, dsisr, dar);
     systemVISetBlack(0);

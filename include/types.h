@@ -17,4 +17,7 @@ typedef int BOOL;
 #define NULL 0
 #endif
 
+// Game memory map (RE4_XBOX: configurable base; GameCube: the original literals).
+#include "xbox/xmem.h"
+
 #endif

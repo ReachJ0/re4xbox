@@ -18,6 +18,7 @@
 #include <hal/xbox.h>
 #include <xboxkrnl/xboxkrnl.h>
 #else
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 
@@ -80,20 +81,29 @@ void XOsBackend_Reset(int kind)
 
 int XOsBackend_ResetButton(void) { return 0; }
 
-void* XOsBackend_AllocMain(unsigned int size)
+void* XOsBackend_AllocMain(unsigned int size, unsigned int wanted)
 {
-    void* p = NULL;
-
 #ifdef NXDK
-    p = malloc(size + 32);
-#else
-    if (posix_memalign(&p, 32, size) != 0) {
-        return NULL;
+    // Virtual memory at a fixed address; the pages are backed by RAM as they are committed.
+    PVOID base = (PVOID) (unsigned long) wanted;
+    SIZE_T len = size;
+    if (NT_SUCCESS(NtAllocateVirtualMemory(&base, 0, &len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE))) {
+        return base;
     }
-    return p;
+    base = NULL;
+    len = size;
+    if (NT_SUCCESS(NtAllocateVirtualMemory(&base, 0, &len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE))) {
+        return base;
+    }
+    return NULL;
+#else
+    void* p = mmap((void*) (unsigned long) wanted, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+    if (p == MAP_FAILED) {
+        p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+    }
+    return p == MAP_FAILED ? NULL : p;
 #endif
-    // 32 byte alignment the portable way
-    return p ? (void*) (((unsigned long) p + 31) & ~31ul) : NULL;
 }
 
 }  // extern "C"

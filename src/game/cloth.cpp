@@ -153,7 +153,7 @@ void ClothCalcTplAddr(void* tpl)
     if (pal == 0) {
         return;
     }
-    if ((s32) pal->descriptorArray < 0) {
+    if (XMEM_ISPTR(pal->descriptorArray)) {
         return;
     }
     pal->descriptorArray = (TEXDescriptor*) ((u32) pal->descriptorArray + (u32) pal);

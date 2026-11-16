@@ -34,7 +34,15 @@ void XOsBackend_Halt(void) { g_halts++; if (g_jmpArmed) longjmp(g_jmp, 1); abort
 void XOsBackend_Reset(int k) { g_resetKind = k; if (g_jmpArmed) longjmp(g_jmp, 2); abort(); }
 int XOsBackend_ResetButton(void) { return g_button; }
 // below 4 GB: the SDK heap masks addresses with 32 bit constants, right on the console, wrong for 64 bit pointers
-void* XOsBackend_AllocMain(unsigned int size) { if (g_allocFail) return NULL; void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0); return p == MAP_FAILED ? NULL : p; }
+unsigned int g_wantedSeen; unsigned int g_sizeSeen;
+void* XOsBackend_AllocMain(unsigned int size, unsigned int wanted)
+{
+    if (g_allocFail) return NULL;
+    g_wantedSeen = wanted; g_sizeSeen = size;
+    void* p = mmap((void*) (uintptr_t) wanted, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+    if (p == MAP_FAILED) p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+    return p == MAP_FAILED ? NULL : p;
+}
 }
 
 static const long long HZ = 40500000;   // 162 MHz / 4
@@ -64,7 +72,11 @@ static void TestInitArena()
     OSInit();
     void* lo = OSGetArenaLo(); void* hi = OSGetArenaHi();
     CHECK(lo != NULL && hi > lo && ((uintptr_t) lo & 31) == 0);
-    CHECK((uintptr_t) hi - (uintptr_t) lo == 0x01200000);
+    // the arena is the GC one: [0x80003100, FST) of the block, and the block is where the game map says
+    CHECK(g_sizeSeen == XMEM_SPAN && g_wantedSeen == XMEM_WANTED_BASE);
+    CHECK((uintptr_t) g_xmemBase == XMEM_WANTED_BASE);
+    CHECK((uintptr_t) lo == g_xmemBase + 0x3100 && (uintptr_t) hi == g_xmemBase + 0x01700000);
+    CHECK(XMem_Valid((unsigned int) (uintptr_t) lo) && XMem_Valid((unsigned int) (uintptr_t) hi));
     OSInit(); CHECK(OSGetArenaLo() == lo && OSGetArenaHi() == hi);       // second call does nothing
     CHECK(OSGetConsoleType() == 1 && (OSGetConsoleType() & 0xF0000000) == 0 && OSGetConsoleSimulatedMemSize() == 0x01800000);
     // the SDK heap on top of that arena, as main_mem.cpp does it

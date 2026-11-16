@@ -84,20 +84,20 @@ void operator delete[](void* p)
 // tagged "_reset_keep_" that survives soft resets).
 void SystemMemInit()
 {
-    SysMem.Heap_end_addr = 0x817F4000;
-    SysMem.Dvdread_addr = 0x80350000;
-    SysMem.Sound_addr = 0x80370000;
-    SysMem.Fifo_addr = 0x803F0000;
-    SysMem.Xfb_addr = 0x80460000;
-    SysMem.Core_addr = 0x80578000;
-    SysMem.Option_addr = 0x807AC000;
-    SysMem.Player_addr = 0x807EC000;
-    SysMem.Weapon_addr = 0x80904000;
-    SysMem.Heap_addr = 0x80974000;
-    SysMem.Debug_usb_addr = 0x81800000;
-    SysMem.Debug_addr = 0x8181FB00;
+    SysMem.Heap_end_addr = XMEM_ADDR(0x817F4000);
+    SysMem.Dvdread_addr = XMEM_ADDR(0x80350000);
+    SysMem.Sound_addr = XMEM_ADDR(0x80370000);
+    SysMem.Fifo_addr = XMEM_ADDR(0x803F0000);
+    SysMem.Xfb_addr = XMEM_ADDR(0x80460000);
+    SysMem.Core_addr = XMEM_ADDR(0x80578000);
+    SysMem.Option_addr = XMEM_ADDR(0x807AC000);
+    SysMem.Player_addr = XMEM_ADDR(0x807EC000);
+    SysMem.Weapon_addr = XMEM_ADDR(0x80904000);
+    SysMem.Heap_addr = XMEM_ADDR(0x80974000);
+    SysMem.Debug_usb_addr = XMEM_ADDR(0x81800000);
+    SysMem.Debug_addr = XMEM_ADDR(0x8181FB00);
     SysMem.Elf_end_addr = (u32) OSGetArenaLo();
-    if (SysMem.Elf_end_addr > 0x8034FFFF) {
+    if (SysMem.Elf_end_addr > XMEM_ADDR(0x8034FFFF)) {
         OSReport("ELF size overflow\n");
 #line 100 "D:/Bio4/Prog/main_mem.cpp"
         HALT();
@@ -636,7 +636,7 @@ void MemCheckUsedHeap()
         y1 = (u32) ((f32) ((u32) cell + cell->size - start) * 400.0f / (f32) size) + 1;
 
         u8* tag = (u8*) cell + cell->size - 0x20;
-        if ((s32) tag >= 0 || (u32) tag > 0x82FFFFFF) {
+        if (XMEM_SGE0(tag) || XMEM_GT(tag)) {
             break;
         }
         if (MEM_TAG_OK(tag)) {
@@ -650,7 +650,7 @@ void MemCheckUsedHeap()
         ey += 14;
         next = cell->next;
         if (next != NULL && next->next != NULL &&
-            ((s32) next->next >= 0 || (u32) next->next > 0x82FFFFFF)) {
+            (XMEM_SGE0(next->next) || XMEM_GT(next->next))) {
             pLog->err(0, 0, "heap next err:%-18s %6x %08x", tag + 4, cell->size - 0x20, cell);
             pLog->err(0, 0, "next addr    : %08x", cell->next);
 #line 770
@@ -712,7 +712,7 @@ void MemCheckUsedHeap()
     if (CurrentHeap == 4) {
         for (cell = cell_dll; cell != NULL; cell = cell->next) {
             u8* tag = (u8*) cell + cell->size - 0x20;
-            if ((s32) tag >= 0 || (u32) tag > 0x82FFFFFF) {
+            if (XMEM_SGE0(tag) || XMEM_GT(tag)) {
                 break;
             }
             if (MEM_TAG_OK(tag)) {
@@ -726,7 +726,7 @@ void MemCheckUsedHeap()
             }
             next = cell->next;
             if (next != NULL && next->next != NULL &&
-                ((s32) next->next >= 0 || (u32) next->next > 0x82FFFFFF)) {
+                (XMEM_SGE0(next->next) || XMEM_GT(next->next))) {
                 pLog->err(0, 0, "heap next err:%-18s %6x %08x", tag + 4, cell->size - 0x20, cell);
                 pLog->err(0, 0, "next addr    : %08x", cell->next);
 #line 870
@@ -735,7 +735,7 @@ void MemCheckUsedHeap()
         }
         for (cell = cell_stage; cell != NULL; cell = cell->next) {
             u8* tag = (u8*) cell + cell->size - 0x20;
-            if ((s32) tag >= 0 || (u32) tag > 0x82FFFFFF) {
+            if (XMEM_SGE0(tag) || XMEM_GT(tag)) {
                 break;
             }
             if (MEM_TAG_OK(tag)) {
@@ -749,7 +749,7 @@ void MemCheckUsedHeap()
             }
             next = cell->next;
             if (next != NULL && next->next != NULL &&
-                ((s32) next->next >= 0 || (u32) next->next > 0x82FFFFFF)) {
+                (XMEM_SGE0(next->next) || XMEM_GT(next->next))) {
                 pLog->err(0, 0, "heap next err:%-18s %6x %08x", tag + 4, cell->size - 0x20, cell);
                 pLog->err(0, 0, "next addr    : %08x", cell->next);
 #line 904
@@ -758,7 +758,7 @@ void MemCheckUsedHeap()
         }
         for (cell = cell_game; cell != NULL; cell = cell->next) {
             u8* tag = (u8*) cell + cell->size - 0x20;
-            if ((s32) tag >= 0 || (u32) tag > 0x82FFFFFF) {
+            if (XMEM_SGE0(tag) || XMEM_GT(tag)) {
                 break;
             }
             if (MEM_TAG_OK(tag)) {
@@ -772,7 +772,7 @@ void MemCheckUsedHeap()
             ey += 14;
             next = cell->next;
             if (next != NULL && next->next != NULL &&
-                ((s32) next->next >= 0 || (u32) next->next > 0x82FFFFFF)) {
+                (XMEM_SGE0(next->next) || XMEM_GT(next->next))) {
                 pLog->err(0, 0, "heap next err:%-18s %6x %08x", tag + 4, cell->size - 0x20, cell);
                 pLog->err(0, 0, "next addr    : %08x", cell->next);
 #line 938
@@ -781,7 +781,7 @@ void MemCheckUsedHeap()
         }
         for (cell = cell_main; cell != NULL; cell = cell->next) {
             u8* tag = (u8*) cell + cell->size - 0x20;
-            if ((s32) tag >= 0 || (u32) tag > 0x82FFFFFF) {
+            if (XMEM_SGE0(tag) || XMEM_GT(tag)) {
                 break;
             }
             if (MEM_TAG_OK(tag)) {
@@ -795,7 +795,7 @@ void MemCheckUsedHeap()
             ey += 14;
             next = cell->next;
             if (next != NULL && next->next != NULL &&
-                ((s32) next->next >= 0 || (u32) next->next > 0x82FFFFFF)) {
+                (XMEM_SGE0(next->next) || XMEM_GT(next->next))) {
                 pLog->err(0, 0, "heap next err:%-18s %6x %08x", tag + 4, cell->size - 0x20, cell);
                 pLog->err(0, 0, "next addr    : %08x", cell->next);
 #line 974

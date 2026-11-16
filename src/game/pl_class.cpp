@@ -44,7 +44,7 @@ void jumpFallOn();
 u32 upDownCk(cPlayer* pl);
 
 // cPlNeck's checks compile to the folded `addis 0x8000; cmplwi 0x02FFFFFF` range form.
-#define VALID_PTR2(p) ((u32) (p) - 0x80000000 <= 0x02FFFFFF)
+#define VALID_PTR2(p) (XMEM_SUB_LE(p))
 
 
 

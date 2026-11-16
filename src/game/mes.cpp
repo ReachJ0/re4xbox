@@ -176,7 +176,7 @@ void MessageFont::create(int char_w, int char_h, TEXPalette* addr, u8* size)
     FONT_TEX* t;
 
     m_tpl = addr;
-    if ((s32) addr->descriptorArray >= 0) {
+    if (XMEM_NOTPTR(addr->descriptorArray)) {
         addr->descriptorArray = (TEXDescriptor*) ((u32) addr->descriptorArray + (u32) addr);
         d = addr->descriptorArray;
         for (i = 0; i < addr->numDescriptors; i++, d++) {

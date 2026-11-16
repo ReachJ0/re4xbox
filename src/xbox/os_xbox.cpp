@@ -40,7 +40,7 @@
 #define BUS_CLOCK 162000000u   // the GameCube's bus clock; the time base runs at a quarter of it
 #define CORE_CLOCK 486000000u
 #define SIM_MEM_SIZE 0x01800000u    // the 24 MB the game was written for
-#define ARENA_SIZE 0x01200000u      // part of it handed to the game's heaps (see OSInit)
+#define FST_LOCATION 0x81700000u    // top of the arena; where DVDGetFSTLocation() points (dvd_xbox.cpp)
 #define CONSOLE_TYPE_RETAIL 0x00000001u
 #define MAX_LINE 512
 
@@ -128,9 +128,9 @@ extern "C" {
 
 // ---- start-up and facts about the machine -------------------------------------------------------------
 
-// Once at boot. Gives the game its arena: ARENA_SIZE bytes of the main memory block (the real arena is what
-// the 24 MB leave after the program image and the file system table; the exact figure is a placeholder
-// until the memory map is decided).
+// Once at boot. Maps the block that plays the GameCube's main memory (xbox/xmem.h) and gives the game its
+// arena: from just above the low-memory area to the file system table, the same bounds a GameCube boot
+// leaves (the game then raises the top to its own fixed heap end, see SystemMemInit).
 void OSInit(void)
 {
     void* block;
@@ -139,14 +139,17 @@ void OSInit(void)
         return;
     }
     EnsureInit();
-    block = XOsBackend_AllocMain(ARENA_SIZE);
+    block = XOsBackend_AllocMain(XMEM_SPAN, XMEM_WANTED_BASE);
     if (!block) {
-        OSPanic(__FILE__, __LINE__, "OSInit(): no memory for the arena");
+        OSPanic(__FILE__, __LINE__, "OSInit(): no memory for the game block");
+    }
+    if (!XMem_SetBase(block, XMEM_SPAN)) {
+        OSPanic(__FILE__, __LINE__, "OSInit(): the game block is at %p, too low (the game needs it above 0x%08x)", block, XMEM_MIN_BASE);
     }
     s_arena = 1;
     XOs_ThreadInit();
-    OSSetArenaLo(block);
-    OSSetArenaHi((u8*) block + ARENA_SIZE);
+    OSSetArenaLo((void*) XMEM_PTR(0x80003100u));
+    OSSetArenaHi((void*) XMEM_PTR(FST_LOCATION));
 }
 
 // The game only initializes the alarm list; nothing sets an alarm.

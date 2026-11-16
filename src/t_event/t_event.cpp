@@ -1044,7 +1044,7 @@ void ToolEvt::SubToolLightMove(ToolEvt* /*t*/)
 {
     cLightTool* lt = pTl;
 
-    if ((u32) lt >= 0x80000000 && (u32) lt <= 0x82FFFFFF) {
+    if (XMEM_GE(lt) && XMEM_LE(lt)) {
         if (lt->move() == 0) {
             SubToolLightInit(this, 0);
         }

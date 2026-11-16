@@ -303,7 +303,7 @@ void smxInit(cObj* obj, cSmxWork* w)
         pLog->err(0, 0, "SmdInit() SMX WORK NUM ERR %d", w->ModelNo);
         return;
     }
-    if ((u32) obj < 0x80000000 || (u32) obj > 0x82FFFFFF || !obj->isAlive()) {
+    if (XMEM_LT(obj) || XMEM_GT(obj) || !obj->isAlive()) {
         pLog->err(0, 0, "SmdInit() SMX UNUSED cObj SELECT %d", w->ModelNo);
         return;
     }
@@ -374,7 +374,7 @@ cObj* SmdGetObjPtr(u32 idx)
         idx = 0;
     }
     obj = scrObjTbl[idx];
-    if ((u32) obj < 0x80000000 || (u32) obj > 0x82FFFFFF) {
+    if (XMEM_LT(obj) || XMEM_GT(obj)) {
         if (DbgFlagChk(pG, DBG_TEST_MODE)) {
             if (!DbgFlagChk(pG, DBG_EVENT_TOOL)) {
                 return NULL;
@@ -451,7 +451,7 @@ void cSmd::slide(int offset)
     u32 addr;
     int i;
 
-    if ((u32) w < 0x80000000 || (u32) w > 0x82FFFFFF) {
+    if (XMEM_LT(w) || XMEM_GT(w)) {
         pLog->err(0, 0, "cSmd::slide(%d) PTR ERROR", offset);
         return;
     }
@@ -466,7 +466,7 @@ void cSmd::slide(int offset)
         u32 base = (u32) this + BinTblOfs;
         for (i = 0; i < nBin; i++) {
             addr = base + ((u32*) base)[i];
-            if (addr < 0x80000000 || addr > 0x82FFFFFF) {
+            if (XMEM_LT(addr) || XMEM_GT(addr)) {
                 pLog->err(0, 0, "cSmd::slide() PTR ERR %08X", addr);
                 return;
             }
@@ -566,7 +566,7 @@ cObj* SmdGetGroupObjPtr(u32 idx)
         idx = 0;
     }
     obj = scrObjTbl[idx];
-    if ((u32) obj < 0x80000000 || (u32) obj > 0x82FFFFFF) {
+    if (XMEM_LT(obj) || XMEM_GT(obj)) {
         if (DbgFlagChk(pG, DBG_TEST_MODE)) {
             if (!DbgFlagChk(pG, DBG_EVENT_TOOL)) {
                 goto ng;
@@ -609,7 +609,7 @@ void SmdSetTrans(u32 idx, int onoff)
 {
     cObj* obj = SmdGetGroupObjPtr(idx);
 
-    if ((u32) obj < 0x80000000 || (u32) obj > 0x82FFFFFF) {
+    if (XMEM_LT(obj) || XMEM_GT(obj)) {
         pLog->err(0, 0, "SmdSetTrans() INVALID INDEX %d", idx);
         return;
     }

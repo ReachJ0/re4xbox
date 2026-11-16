@@ -459,14 +459,14 @@ void DrawTpl(TEXPalette* tpl, int x, int y, int w, int h)
     CLUTHeader* clut;
     u32 addr = (u32) tpl;
 
-    if (addr < 0x80000000 || addr > 0x82FFFFFF) {
+    if (XMEM_LT(addr) || XMEM_GT(addr)) {
         return;
     }
     desc = (TEXDescriptor*) (tpl + 1);
     if (!VALID_PTR(desc)) {
         return;
     }
-    if ((s32) desc->textureHeader >= 0) {
+    if (XMEM_NOTPTR(desc->textureHeader)) {
         desc->textureHeader = (TEXHeader*) ((u8*) tpl + (u32) desc->textureHeader);
         if (!VALID_PTR(desc->textureHeader)) {
             return;
@@ -474,12 +474,12 @@ void DrawTpl(TEXPalette* tpl, int x, int y, int w, int h)
         desc->CLUTHeader = (CLUTHeader*) ((u8*) tpl + (u32) desc->CLUTHeader);
         desc->textureHeader->data = (u8*) tpl + (u32) desc->textureHeader->data;
         desc->CLUTHeader->data = (u8*) tpl + (u32) desc->CLUTHeader->data;
-        if ((s32) desc->textureHeader >= 0) {
+        if (XMEM_NOTPTR(desc->textureHeader)) {
             return;
         }
     }
     hdr = desc->textureHeader;
-    if ((u32) hdr > 0x82FFFFFF) {
+    if (XMEM_GT(hdr)) {
         return;
     }
     if (hdr->format - 8 <= 1) {

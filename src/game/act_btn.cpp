@@ -51,7 +51,7 @@ void cActionButton::move()
         return;
     }
     for (tag = m_ot[15]; tag != 0xFFFFFFFF; tag = w->tag) {
-        w = (ACT_WORK*) (tag | 0x80000000);
+        w = (ACT_WORK*) XMEM_TAG(tag);
         if ((s32) tag >= 0) {
             continue;
         }
