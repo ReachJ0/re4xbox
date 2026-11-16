@@ -95,3 +95,7 @@ is that the output bytes never change.
 The reconstructed game and SDK source is the property of Capcom, Nintendo and CRI Middleware and is
 published for research and preservation only. The build scripts, tools, configuration and
 documentation written for this project are released under CC0, see `LICENSE`.
+
+## Xbox port
+
+This fork ports the game to the original Xbox (nxdk), layer by layer: see [docs/xbox.md](docs/xbox.md). The branch is `xbox-port`; `master` mirrors upstream.
