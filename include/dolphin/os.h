@@ -79,6 +79,9 @@ extern u32 __OSCoreClock;
 extern OSThreadQueue __OSActiveThreadQueue;
 extern OSThread* __OSCurrentThread;
 extern OSThread* __gUnkThread1;
+// count leading zeros: the PowerPC instruction, src/xbox/thread_xbox.cpp
+u32 xos_cntlzw(u32 v);
+#define __cntlzw xos_cntlzw
 #else
 #define __OSBusClock  (*(u32 *)(OS_BASE_CACHED | 0x00F8))
 #define __OSCoreClock (*(u32 *)(OS_BASE_CACHED | 0x00FC))

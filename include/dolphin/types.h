@@ -22,7 +22,7 @@ typedef int BOOL;
 
 #if defined(__MWERKS__)
 #define AT_ADDRESS(addr) : (addr)
-#elif defined(__GNUC__)
+#elif defined(__GNUC__) || defined(__clang__)
 //#define AT_ADDRESS(addr) __attribute__((address((addr))))
 #define AT_ADDRESS(addr)  // was removed in GCC. define in linker script instead.
 #else

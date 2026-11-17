@@ -1,6 +1,13 @@
 #ifdef RE4_XBOX
 // the SDK's sqrtf/fabsf/floor stand-ins are written around the PowerPC (frsqrte, __fabsf): use the C library
 #include <math.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+float fabsf(float);
+#ifdef __cplusplus
+}
+#endif
 #else
 #pragma cplusplus on
 

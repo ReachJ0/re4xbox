@@ -102,8 +102,10 @@ void __OSSetTick(register OSTick newTicks);
 OSTime __OSTimeToSystemTime(OSTime time);
 
 // ppc_eabi_init
+#ifndef RE4_XBOX
 __declspec(section ".init") asm void __init_hardware(void);
 __declspec(section ".init") asm void __flush_cache(void* address, unsigned int size);
+#endif
 void __init_user(void);
 void _ExitProcess(void);
 
