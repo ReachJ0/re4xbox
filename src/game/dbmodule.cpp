@@ -1,6 +1,7 @@
 // game/dbmodule.cpp: debug primitive drawing (tiles, lines, spheres, cylinders, cones,
 // boxes, wireframes) and the time display used by the debug tools.
 
+#include "xbox/xps.h"
 #include "dbmodule.h"
 #include "global.h"
 #include "gx.h"
@@ -820,7 +821,11 @@ void init_corn()
 
 // `psq_l f,0(p),1,qr5` straight from the vertex pointer: inline asm in the original (the compiler
 // always converts an s16 through a stack slot).
+#ifdef RE4_XBOX
+#define PSQ_L_S16(p) (psq_l((p), 1, 5).p0)
+#else
 #define PSQ_L_S16(p) ({ f32 f_; asm volatile("psq_l %0,0(%1),1,5" : "=f"(f_) : "b"(p)); f_; })
+#endif
 
 
 

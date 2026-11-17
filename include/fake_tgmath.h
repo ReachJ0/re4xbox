@@ -1,3 +1,7 @@
+#ifdef RE4_XBOX
+// the SDK's sqrtf/fabsf/floor stand-ins are written around the PowerPC (frsqrte, __fabsf): use the C library
+#include <math.h>
+#else
 #pragma cplusplus on
 
 extern inline float sqrtf(float x) {
@@ -64,3 +68,4 @@ inline float floor(float x) {
 }
 
 #pragma cplusplus reset
+#endif

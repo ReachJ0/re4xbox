@@ -1,4 +1,5 @@
 // game/main: entry point, frame loop, system init and reset handling (D:/Bio4/Prog/main.cpp).
+#include "xbox/xps.h"
 #include "types.h"
 #include "global.h"
 #include "joy.h"
@@ -273,6 +274,9 @@ void systemStartInit()
     VISetPostRetraceCallback(postVSyncCallback);
     Dvd.Init();
     CardInit();
+#ifdef RE4_XBOX
+    XPs_InitGQR();
+#else
     asm("li 3, 4\n"
         "oris 3, 3, 4\n"
         "mtspr 914, 3\n"
@@ -288,6 +292,7 @@ void systemStartInit()
         :
         :
         : "r3");
+#endif
     SystemMemInit();
     if (pG->IsDevConsole == 1) {
         CardDbgCacheSet();

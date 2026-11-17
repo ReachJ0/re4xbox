@@ -1,5 +1,6 @@
 // game/math_sub: vector/matrix helpers shared by the game code (D:/Bio4/Prog/math_sub.cpp). The
 // rotation convention is RotMatrix = Rz * Ry * Rx, so X is applied first.
+#include "xbox/xps.h"
 #include "types.h"
 #include "vec.h"
 #include "db_log.h"
@@ -662,6 +663,14 @@ f32 SQRTF(f32 x)
     if (x <= 0.00001f) {
         return 0.0f;
     }
+#ifdef RE4_XBOX
+    // frsqrte is an estimate from a lookup table, refined by one Newton step; this is the exact square root instead
+    // (the original is within
+    // about 1e-3 of it).
+    (void) half;
+    (void) three;
+    r = sqrtf(x);
+#else
     asm("frsqrte 2, %1\n\t"
         "fmuls 3, 2, 2\n\t"
         "fmuls 4, 2, %2\n\t"
@@ -671,6 +680,7 @@ f32 SQRTF(f32 x)
         : "=f"(r)
         : "f"(x), "f"(half), "f"(three)
         : "fr2", "fr3", "fr4");
+#endif
     return r;
 }
 
@@ -712,12 +722,35 @@ f32 Coeff[10] = {
 f32 powx[2] = {1.0f, 1.0f};
 f32 sum[2] = {0.0f, 0.0f};
 
+#ifdef RE4_XBOX
+// The paired-single Taylor series of SINF/COSF, one instruction per line of the original assembly (r9 = Coeff,
+// f3 = powx, f4 = sum, f2 = (x, x^2), f5 = the coefficient pair).
+static f32 SincosSeries(f32 x)
+{
+    const f32* c = Coeff;
+    XPs f3 = psq_l(powx, 0, 0);
+    XPs f4 = psq_l(sum, 0, 0);
+    XPs f2 = ps_merge00(f3, xps(x, 0.0f));
+    XPs f5;
+    f2 = ps_muls0(f2, xps(x, 0.0f));
+    for (int i = 0; i < 5; i++) {
+        f5 = psq_l(c + 2 * i, 0, 0);
+        f3 = ps_muls1(f2, f3);
+        f4 = ps_madd(f3, f5, f4);
+    }
+    return ps_sum0(f4, f4, f4).p0;
+}
+#endif
+
 // sin(x) by a paired-single Taylor series after wrapping x into [-PI, PI).
 f32 SINF(f32 x)
 {
     f32 r;
 
     x = LIMIT_ANGLE(x);
+#ifdef RE4_XBOX
+    r = SincosSeries(x);
+#else
     asm volatile(
         "lis 9, Coeff@ha\n\t"
         "li 10, powx@sda21\n\t"
@@ -746,6 +779,7 @@ f32 SINF(f32 x)
         : "=f"(r)
         : "f"(x)
         : "r9", "r10", "r11", "fr2", "fr3", "fr4", "fr5");
+#endif
     return r;
 }
 
@@ -755,6 +789,9 @@ f32 COSF(f32 x)
     f32 r;
 
     x = LIMIT_ANGLE(x + 1.5707964f);
+#ifdef RE4_XBOX
+    r = SincosSeries(x);
+#else
     asm volatile(
         "lis 9, Coeff@ha\n\t"
         "li 10, powx@sda21\n\t"
@@ -783,6 +820,7 @@ f32 COSF(f32 x)
         : "=f"(r)
         : "f"(x)
         : "r9", "r10", "r11", "fr2", "fr3", "fr4", "fr5");
+#endif
     return r;
 }
 
@@ -793,6 +831,19 @@ f32 LIMIT_ANGLE(f32 x)
     f32 max = PI;
     f32 step = PI2;
 
+#ifdef RE4_XBOX
+    // the loop of the assembly: a value that is not below `max` (a NaN too) is brought down by `step` while it stays
+    // at or above `max`; otherwise a value below `min` is brought up while it stays below `min`
+    if (!(x < max)) {
+        do {
+            x -= step;
+        } while (x >= max);
+    } else if (x < min) {
+        do {
+            x += step;
+        } while (x < min);
+    }
+#else
     asm("fcmpu 0, %0, %2\n\t"
         "blt 1f\n"
         "0:\n\t"
@@ -811,5 +862,6 @@ f32 LIMIT_ANGLE(f32 x)
         : "+f"(x)
         : "f"(min), "f"(max), "f"(step)
         : "cr0");
+#endif
     return x;
 }

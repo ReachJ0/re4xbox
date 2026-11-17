@@ -18,7 +18,12 @@ void ICInvalidateRange(void* addr, u32 nBytes);
 
 #define LC_BASE_PREFIX 0xE000
 #define LC_BASE (LC_BASE_PREFIX << 16)
+#ifdef RE4_XBOX
+void* XMem_LockedCache(void);
+#define LCGetBase() XMem_LockedCache()
+#else
 #define LCGetBase() ((void*)LC_BASE)
+#endif
 
 void LCEnable(void);
 void LCDisable(void);

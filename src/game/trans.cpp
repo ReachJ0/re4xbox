@@ -2,6 +2,7 @@
 // commonScreenMatSub skins its vertices into the primitive buffer, ModelRender / commonModelTrans
 // set up the TEV stages of every material and submit the display lists.
 
+#include "xbox/xps.h"
 #include "atari.h"
 #include "light.h"
 #include "ctrl.h"
@@ -84,10 +85,15 @@ struct cWeight {
 #define PTR_INVALID2(p) (XMEM_SUB_GT(p))
 
 // u8 -> f32 through GQR2 straight from memory: the compiler only emits psq_l from a stack slot.
+#ifdef RE4_XBOX
+#define PSQ_L_U8(p) (psq_l((p), 1, 2).p0)
+#define PSQ_L_U8_TO(dst, p) ((dst) = psq_l((p), 1, 2).p0)
+#else
 #define PSQ_L_U8(p) ({ f32 f_; asm volatile("psq_l %0,0(%1),1,2" : "=f"(f_) : "b"(p) : "memory"); f_; })
 // Loads straight into the named variable so the asm output shares the variable's (global) register
 // (espgen42/45 too; asm stays in the unit so asmcheck.py counts it).
 #define PSQ_L_U8_TO(dst, p) asm volatile("psq_l %0,0(%1),1,2" : "=f"(dst) : "b"(p) : "memory")
+#endif
 
 // Bit test as 0 / 1 (matching helper).
 static inline int isBit(u32 f, u32 b)
@@ -844,7 +850,7 @@ int MakeWeightPaletteExt(cWeightExt* w0, int n)
             m[2][3] += *s++ * rate;
             cnt++;
         }
-        PSMTXReorder(m, (f32(*)[3]) (0xE0000000 + i * 0x30));
+        PSMTXReorder(m, (f32(*)[3]) XMEM_LC_PTR(i * 0x30));
     }
 #undef w
     return cnt;
@@ -896,7 +902,7 @@ int MakeWeightPalette(cWeight* w0, int n)
             m[2][3] += *s++ * rate;
             cnt++;
         }
-        PSMTXReorder(m, (f32(*)[3]) (0xE0000000 + i * 0x30));
+        PSMTXReorder(m, (f32(*)[3]) XMEM_LC_PTR(i * 0x30));
     }
 #undef w
     return cnt;
@@ -2482,6 +2488,36 @@ static void primBuffDebugDisp(int n)
 
 // Skin `n` vertices (s16 x/y/z + s16 matrix index, 8 bytes) from src into dst (s16 x/y/z, 6 bytes)
 // with the matrix palette in locked cache (0xE0000000, ROMtx 0x30 each). GQR6 holds the fixed point scale.
+#ifdef RE4_XBOX
+// One iteration per vertex: the six quantized loads of the matrix palette entry, two of the vertex (GQR6), the
+// six multiply-adds and two stores, as in the assembly below.
+static inline void SkinVertex(const uint8_t* pal, XPs v8, XPs v9, uint8_t* d, int dxy, int dz)
+{
+    XPs f0 = psq_l(pal + 0x00, 0, 0), f1 = psq_l(pal + 0x08, 1, 0);
+    XPs f2 = psq_l(pal + 0x0c, 0, 0), f3 = psq_l(pal + 0x14, 1, 0);
+    XPs f4 = psq_l(pal + 0x18, 0, 0), f5 = psq_l(pal + 0x20, 1, 0);
+    XPs f6 = psq_l(pal + 0x24, 0, 0), f7 = psq_l(pal + 0x2c, 1, 0);
+    XPs f12 = ps_madds0(f0, v8, f6);
+    XPs f13 = ps_madds0(f1, v8, f7);
+    f12 = ps_madds1(f2, v8, f12);
+    f13 = ps_madds1(f3, v8, f13);
+    f12 = ps_madds0(f4, v9, f12);
+    f13 = ps_madds0(f5, v9, f13);
+    psq_st(f12, d, 0, 6);
+    psq_st(f13, d + dxy, 1, 6);
+    (void) dz;
+}
+
+void CalcSk1_x(void* dst, void* src, u32 n)
+{
+    const uint8_t* s = (const uint8_t*) src;
+    uint8_t* d = (uint8_t*) dst;
+    for (u32 i = 0; i < n; i++, s += 8, d += 6) {
+        const uint8_t* pal = (const uint8_t*) XMEM_LC_PTR((int) *(const int16_t*) (s + 6) * 0x30);
+        SkinVertex(pal, psq_l(s, 0, 6), psq_l(s + 4, 1, 6), d, 4, 0);
+    }
+}
+#else
 void CalcSk1_x(void* dst, void* src, u32 n)
 {
     asm volatile(
@@ -2516,8 +2552,20 @@ void CalcSk1_x(void* dst, void* src, u32 n)
         "addis 9, 9, 0xE000\n"
         "bdnz 1b\n");
 }
+#endif
 
 // Same for s8 normals (s8 x/y/z + u8 matrix index, 4 bytes) into s8 x/y/z (3 bytes).
+#ifdef RE4_XBOX
+void CalcSk1_x2(void* dst, void* src, u32 n)
+{
+    const uint8_t* s = (const uint8_t*) src;
+    uint8_t* d = (uint8_t*) dst;
+    for (u32 i = 0; i < n; i++, s += 4, d += 3) {
+        const uint8_t* pal = (const uint8_t*) XMEM_LC_PTR((u32) s[3] * 0x30);
+        SkinVertex(pal, psq_l(s, 0, 6), psq_l(s + 2, 1, 6), d, 2, 0);
+    }
+}
+#else
 void CalcSk1_x2(void* dst, void* src, u32 n)
 {
     asm volatile(
@@ -2552,11 +2600,16 @@ void CalcSk1_x2(void* dst, void* src, u32 n)
         "addis 9, 9, 0xE000\n"
         "bdnz 1b\n");
 }
+#endif
 
 // Sets GQR6 (the paired-single quantisation register the skinning loads use).
 void setupGQR6(u32 v)
 {
+#ifdef RE4_XBOX
+    XPS_SET_GQR(6, v);
+#else
     asm volatile("mtspr 918, %0" : : "r"(v));
+#endif
 }
 
 // Relocate a TPL whose texture headers also carry a CLUT (thermo palette).

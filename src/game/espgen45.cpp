@@ -1,5 +1,6 @@
 // game/espgen45: effect controller 45, the open-air water surface (D:/Bio4/Prog/espgen45.cpp) that
 // follows the camera target. Room code tunes it through the Estgen45Set* entry points.
+#include "xbox/xps.h"
 #include "light.h"
 #include "atari.h"
 #include "global.h"
@@ -74,7 +75,11 @@ void Espgen45_static_init()
 // u8 to f32 through GQR2 from a stack byte, since the compiler only emits psq_l from its own fpmem slot.
 // The volatile asm is also the scheduling barrier that gives the target's order in loop A. Same definition
 // as trans.cpp, kept in this unit so asmcheck.py counts it.
+#ifdef RE4_XBOX
+#define PSQ_L_U8_TO(dst, p) ((dst) = psq_l((p), 1, 2).p0)
+#else
 #define PSQ_L_U8_TO(dst, p) asm volatile("psq_l %0,0(%1),1,2" : "=f"(dst) : "b"(p) : "memory")
+#endif
 
 // Bump texture (I8, 8x4 tiles) index of grid point (x, y). x/8 before y/4 (the two signed divisions are
 // separate blocks, so their order is the source order) and `(y / 4) << 5`: with `* 32` fold would

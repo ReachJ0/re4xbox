@@ -1,6 +1,7 @@
 // game/Espgen42.cpp: effect controller 42, the simulated room water surface. The rest of the game
 // uses AddWaterPower / GetWaterHeight / GetWaterCrossPos for splashes, floating and bullet hits.
 
+#include "xbox/xps.h"
 #include "light.h"
 #include "atari.h"
 #include "global.h"
@@ -445,7 +446,11 @@ int GetWaterCrossPos(Vec* pos, Vec* dir, Vec* Ret)
 // u8 to f32 through GQR2 from a stack byte. The volatile asm is a scheduling barrier that orders the
 // address adds and neighbour loads as in the target's loop A. The same definition is in trans.cpp,
 // and the asm stays in this unit so asmcheck.py counts it.
+#ifdef RE4_XBOX
+#define PSQ_L_U8_TO(dst, p) ((dst) = psq_l((p), 1, 2).p0)
+#else
 #define PSQ_L_U8_TO(dst, p) asm volatile("psq_l %0,0(%1),1,2" : "=f"(dst) : "b"(p) : "memory")
+#endif
 
 // Step 0, every frame: the wave simulation, which also sets Status_flg[0] 0x200 (water present).
 // Mode 1 is a cheaper single-pass variant, and in the effect tool the B button drops the surface.

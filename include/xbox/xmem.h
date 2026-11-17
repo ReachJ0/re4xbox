@@ -24,6 +24,9 @@ extern "C" {
 #define XMEM_MIN_BASE 0x08000000u  // blocks below this could be confused with file offsets
 #define XMEM_WANTED_BASE 0x20000000u  // where the backends try to map the block
 
+#define XMEM_LC_SIZE 0x4000u  // the GameCube's locked cache: 16 KB the game uses as scratch memory
+void* XMem_LockedCache(void);  // its stand-in (src/xbox/cache_xbox.cpp)
+
 extern unsigned int g_xmemBase;  // real address that plays the role of 0x80000000
 
 // Declares the block that plays the GC memory. Resets the extra ranges. Returns 0 (and changes
@@ -49,6 +52,8 @@ int XMem_InBlock(unsigned int p);
 #define XMEM_TAGOF(p) XMEM_OFF(p)  // 31-bit ordering-table tag of a pointer
 // ordering-table tag (31-bit offset, bit 31 = flag) -> real address
 #define XMEM_TAG(v) ((unsigned int) (g_xmemBase + ((unsigned int) (v) & 0x7FFFFFFFu)))
+// address inside the locked cache (0xE0000000 + off) -> real pointer
+#define XMEM_LC_PTR(off) ((void*) ((unsigned char*) XMem_LockedCache() + (off)))
 // "is this not a game pointer"
 #define XMEM_BAD(p) (!XMem_Valid((unsigned int) (p)))
 #define XMEM_OK(p) (XMem_Valid((unsigned int) (p)))
@@ -71,6 +76,7 @@ int XMem_InBlock(unsigned int p);
 
 #define XMEM_ADDR(a) (a)
 #define XMEM_PTR(a) ((void*) (a))
+#define XMEM_LC_PTR(off) ((void*) (0xE0000000 + (off)))
 #define XMEM_FROM_OFF(off) ((off) + 0x80000000)
 #define XMEM_OFF(p) ((u32) (p) - 0x80000000)
 #define XMEM_TAGOF(p) ((u32) (p) & 0x7FFFFFFF)

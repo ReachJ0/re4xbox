@@ -1,6 +1,7 @@
 // game/pendulum.cpp: pendulum and cloth chain physics. The pl_cloth, em_cloth and obj units pick
 // one of the three simulation variants PenClothMove, Move2 or Move3 per accessory.
 
+#include "xbox/xps.h"
 #include "pendulum.h"
 #include "pl_cloth.h"
 #include "atari.h"
@@ -1157,7 +1158,7 @@ PenAtWork* penClothAtMake(cModel* m, CLOTH_AT_SET* at, int n)
     if (at == 0 || n == 0 || m == 0) {
         return 0;
     }
-    wk = (PenAtWork*) 0xE0000000;
+    wk = (PenAtWork*) XMEM_LC_PTR(0);
     a = wk->at;
     wk->num = n;
     wk->pAt = a;

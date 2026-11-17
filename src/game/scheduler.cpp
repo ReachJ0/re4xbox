@@ -1,5 +1,6 @@
 // game/scheduler: the cooperative task scheduler (D:/Bio4/Prog/scheduler.cpp). The main thread runs
 // each task's OS thread in turn every frame until it calls TaskSleep or TaskExit.
+#include "xbox/xps.h"
 #include "types.h"
 #include "global.h"
 #include "main_mem.h"
@@ -175,6 +176,9 @@ void* TaskExec_hook(void* value)
     if (pParentThread != NULL) {
         OSSuspendThread(pParentThread);
     }
+#ifdef RE4_XBOX
+    XPs_InitGQR();
+#else
     asm("li 3, 4\n"
         "oris 3, 3, 4\n"
         "mtspr 914, 3\n"
@@ -190,6 +194,7 @@ void* TaskExec_hook(void* value)
         :
         :
         : "r3");
+#endif
     GXSetCurrentGXThread();
     pCTask->pFunc((int) value);
     return NULL;

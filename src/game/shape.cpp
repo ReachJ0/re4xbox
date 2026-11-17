@@ -1,5 +1,6 @@
 // game/shape: vertex-morph ("shape") animation of a model part, used for the face morphs of the
 // player and partner and the mouth and eye shapes of the enemies.
+#include "xbox/xps.h"
 #include "types.h"
 #include "vec.h"
 #include "db_log.h"
@@ -175,8 +176,13 @@ struct ShapeEntry {
 };
 
 // Apply the shape `data` at `rate` to the vertex buffer `dst` (8-byte vertices, s16 xyz).
+#ifdef RE4_XBOX
+#define PSQ_L_S16(p) (psq_l((p), 1, 5).p0)
+#define PSQ_ST_S16(f, p) psq_st(xps((f), 0.0f), (p), 1, 5)
+#else
 #define PSQ_L_S16(p) ({ f32 f_; asm volatile("psq_l %0,0(%1),1,5" : "=f"(f_) : "b"(p)); f_; })
 #define PSQ_ST_S16(f, p) asm volatile("psq_st %0,0(%1),1,5" : : "f"(f), "b"(p) : "memory")
+#endif
 
 // Applies shape `data` at frame `rate` to the vertex buffer `dst`: for every channel flagged 4 the
 // Hermite weight (percent / 100, x1.37 with shapeFlags bit3) scales that channel's delta list
