@@ -50,3 +50,22 @@ and ~40 files whose address checks now use the `XMEM_*` macros (`include/xbox/xm
    (`-D_prolog=<mod>_prolog` ...) and isolation of the ~600 global names several modules define
    (`tools/xbox/rel_symbols.py`); module constructors (`_ctors`).
 6. nxdk/clang porting of MWCC/GCC 2.95 extensions, then hardware verification.
+
+
+## Estado del enlace del juego (xbox-game-main)
+
+`xbox/Makefile` compila los 293 `src/game/*.cpp` (todos menos `memset_2` y `yz2asm`, que son asm PowerPC) con nxdk.
+El enlace falla solo por simbolos sin resolver: la lista completa esta en `docs/xbox_undefined_symbols.txt` (230).
+
+| Familia | Simbolos | Capa que falta |
+|---|---|---|
+| GX* | 96 | renderizado GX -> NV2A |
+| AX*, AXFX*, MIX*, SYN*, SEQ*, AXART*, AI* | ~75 | audio AX/DSP |
+| mwPly*, ADX* | ~15 | video Sofdec / audio ADX (middleware) |
+| VI*, OSFont*, PC*, PPCSync, DB* | ~25 | video, fuente ROM, depuracion en host (stubs) |
+| `__builtin_new/delete/vec_*`, `memset_v` | 5 | alias de GCC 2.95 a operator new/delete |
+| propios del juego | ~10 | `cModel::isTrans`, `ScreenReSizeI`, `TEXGet`, ... (viven en otros modulos/REL) |
+
+Portado a C para x86: `memset_asm`, `memclr_asm`, `mtxclr_asm` (`src/xbox/native_asm.cpp`).
+SIN portar: `yz2Decode_Decode` (descompresor yz2, ~500 lineas de asm); hoy llama a OSPanic.
+Dialecto: `include/xbox/xcompat.h` (strstr const, `asm(...)` vacio) y `RE4_REGPIN` (pines de registro).

@@ -15,12 +15,13 @@ LAYERS := ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xb
 SDK_C  := OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
 
 GEN_C := mtx mtxvec mtx44 mtx44vec vec quat
-SRCS = $(CURDIR)/main.cpp $(addprefix $(CURDIR)/gen/,$(addsuffix .c,$(GEN_C))) \
+GAME := $(filter-out memset_2 yz2asm,$(basename $(notdir $(wildcard $(RE4)/src/game/*.cpp))))
+SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))) $(RE4)/src/xbox/native_asm.cpp $(addprefix $(CURDIR)/gen/,$(addsuffix .c,$(GEN_C))) \
        $(addprefix $(RE4)/src/xbox/,$(addsuffix .cpp,$(LAYERS))) \
        $(addprefix $(RE4)/src/lib/,$(addsuffix .c,$(SDK_C)))
 
 # what the sources of the game expect
-RE4_DEFS = -DRE4_XBOX -DNXDK
+RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing
 RE4_INC  = -I$(RE4)/include -I$(RE4)/src/lib
 CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w
 CXXFLAGS += $(RE4_DEFS) $(RE4_INC) -w
@@ -30,3 +31,4 @@ $(CURDIR)/gen/%.c: $(RE4)/src/lib/%.c $(RE4)/tools/xbox/strip_ps.py
 	python3 $(RE4)/tools/xbox/strip_ps.py $< $@
 
 include $(NXDK_DIR)/Makefile
+LDFLAGS += -errorlimit:0

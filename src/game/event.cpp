@@ -2006,7 +2006,7 @@ int Event::GetMod(void** mod, char* nm, u8* type, int* wkNo)
     } else if (ModTbl.GetDat(&m, &t, nm, &no) == 0) {
     err:
         {
-            register int pin asm("r27"); // COMPILER-DIFF: #17
+            register int pin RE4_REGPIN("r27"); // COMPILER-DIFF: #17
             asm volatile("" : "=r"(pin));
         }
         pLog->err(0, 0, "Event::GetMod : mod failed[%s]", nm);
@@ -2016,7 +2016,7 @@ int Event::GetMod(void** mod, char* nm, u8* type, int* wkNo)
         // COMPILER-DIFF: #17. r27 was used-so-far in the original's global-alloc pass 0 and
         // conflicted with nm (err block) and type/wkNo/mod (tail) but not with `this`, which
         // therefore took r27 while mod fell to r28. No code is emitted.
-        register int pin asm("r27");
+        register int pin RE4_REGPIN("r27");
         asm volatile("" : "=r"(pin));
     }
     if (type != 0) {

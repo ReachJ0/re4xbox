@@ -697,7 +697,7 @@ void make_comn_fit_light(ShadowMng* mng, cModel* m)
     {
         // COMPILER-DIFF: 13 (local-alloc qty order): r11 pinned after the 1.0 load and before the
         // conversion's lfd, so the fpmem loadaddr cannot take r11 and the 1.0 pool high gets it.
-        register u32 k asm("r11");
+        register u32 k RE4_REGPIN("r11");
         asm("" : "=r"(k) : "f"(1.0f));
         asm("" : "=m"(pos.x) : "r"(k));
         if (mng->fov < 1.0f) {
@@ -772,7 +772,7 @@ void make_comn_parallel_light(ShadowMng* mng, cModel* m)
     mng->fov -= w->Fovy_sub;
     {
         // COMPILER-DIFF: 13 (local-alloc qty order): see make_comn_fit_light.
-        register u32 k asm("r11");
+        register u32 k RE4_REGPIN("r11");
         asm("" : "=r"(k) : "f"(1.0f));
         asm("" : "=m"(pos.x) : "r"(k));
         if (mng->fov < 1.0f) {

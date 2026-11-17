@@ -312,10 +312,10 @@ void PenClothMove(cModel* m, CLOTH_INFO* c)
                 // plain hard-register copy `pv = pa` survives (r5 is still live for the call, so combine
                 // cannot fold it and regmove stops at the call); the codeless asm reading pv with r3/r4
                 // inputs puts the copy after the last argument move in sched2, the target's issue order.
-                register Vec* pa asm("r5") = &v;
-                register Vec* pw asm("r3") = &w->Pos;
-                register Vec* pm asm("r4") = &mpos;
-                register Vec* pv asm("r28");
+                register Vec* pa RE4_REGPIN("r5") = &v;
+                register Vec* pw RE4_REGPIN("r3") = &w->Pos;
+                register Vec* pm RE4_REGPIN("r4") = &mpos;
+                register Vec* pv RE4_REGPIN("r28");
                 pv = pa;
                 asm("" : "+r"(pv) : "r"(pm), "r"(pw));
                 PSVECSubtract(pw, pm, pa);
@@ -550,7 +550,7 @@ void PenClothMove2(cModel* m, CLOTH_INFO* c)
     PEN_INFO* w;
     PEN_INFO* uw;
     cParts* np;   // neighbour parts (one variable for every lookup: r7 in the original)
-    register const u8* pp asm("r21");   // COMPILER-DIFF: #17 (register pin): pp above i in global-alloc
+    register const u8* pp RE4_REGPIN("r21");   // COMPILER-DIFF: #17 (register pin): pp above i in global-alloc
     u32 i;
     u32 k;
     int hit;

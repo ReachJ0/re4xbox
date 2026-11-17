@@ -337,7 +337,7 @@ void Espgen45_Move00(cEspgen* pGen)
                     // COMPILER-DIFF: candidate #17 (r0 occupant): `j / 8` pinned to r0 = a hard-register conflict of the i
                     // copy `t_i` with r0 during the i-division blocks, so global.c's preference override skips r0 and t_i
                     // takes r9 (the target's `mr r9,i`); jq's shift then inherits r0 (`slwi r0,r0,5`).
-                    register int jq asm("r0") = j / 8;
+                    register int jq RE4_REGPIN("r0") = j / 8;
                     jx = (i / 4) << 5;
                     mx = p->Width;
                     // COMPILER-DIFF: candidate (sched1 slot fillers). Three codeless frame stores of `v` (dead after the

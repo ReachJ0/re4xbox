@@ -5,6 +5,8 @@
 
 #include <dolphin/os.h>
 
+#undef main
+extern "C++" int re4_main();
 int main(void)
 {
     XVideoSetMode(640, 480, 32, REFRESH_DEFAULT);

@@ -74,7 +74,7 @@ void PadRead()
 #ifdef RE4_XBOX
     int dead;  // register pinning is PowerPC-only (matching hack)
 #else
-    register int dead asm("r16");                // COMPILER-DIFF: #17
+    register int dead RE4_REGPIN("r16");                // COMPILER-DIFF: #17
 
 #endif
     dead = 10;

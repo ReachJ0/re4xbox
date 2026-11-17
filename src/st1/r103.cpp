@@ -146,7 +146,7 @@ void r103_openShelf_main(SHELF_SMD* s, int opened)
             // reload_cse after both take r10) is issued between the second `lis` and its `lfs`
             // in sched1, which equalises the spans and lets the qty number decide.
             cModel* pa = *(cModel* volatile*) &a->pList;
-            register cModel* pa2 asm("r10");
+            register cModel* pa2 RE4_REGPIN("r10");
 
             pa2 = pa;
             pa2->ang.y = ra;

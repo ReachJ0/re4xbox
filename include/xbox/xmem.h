@@ -94,4 +94,12 @@ int XMem_InBlock(unsigned int p);
 #define XMEM_NOTPTR(p) ((s32) (p) >= 0)
 
 #endif
+
+// Register pins of the original codegen (`register T x RE4_REGPIN("r0")`): only meaningful for GCC/PowerPC.
+#ifdef RE4_XBOX
+#define RE4_REGPIN(r)
+#else
+#define RE4_REGPIN(r) asm(r)
+#endif
+
 #endif
