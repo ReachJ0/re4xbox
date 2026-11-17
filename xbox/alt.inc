@@ -1,0 +1,13 @@
+-alternatename:?DvdView@@3UDvdFreeSizeView@@A=?Dvd@@3VcDvd@@A
+-alternatename:?Em10_fs_tbl@@3PAEA=?Em10_fs_tbl@@3UFootShadowTbl@@A
+-alternatename:?Em2c_fs_tbl@@3PAEA=?Em2c_fs_tbl@@3UFootShadowTbl@@A
+-alternatename:?EmInitFunc@@3PAXA=?EmInitFunc@@3P6AXPAVcEm@@@ZA
+-alternatename:?EspgenTrans@@YAXXZ=?EspgenTrans@@YAHXZ
+-alternatename:?Filter09RenderI@@YAXH@Z=?Filter09Render@@YAXXZ
+-alternatename:?Game@@3UGameWork@@A=?Game@@3UGAME_WORK@@A
+-alternatename:?SndCallV@@YAXGGPAUVec@@HHPAVcUnit@@@Z=?SndCall@@YAKGGPAUVec@@HHPAVcUnit@@@Z
+-alternatename:?Snd_str_work@@3PAUDvdSndStrWork@@A=_Snd_str_work
+-alternatename:?Specular@@3UGXTexObj@@A=?Specular@@3PAUGXTexObj@@A
+-alternatename:?pSysView@@3PAUSysFlagsView@@A=?pSys@@3PAUSYSTEM_SAVE_WORK@@A
+-alternatename:?pl_fs_tbl@@3PAEA=?pl_fs_tbl@@3UFootShadowTbl@@A
+-alternatename:_ScreenReSizeI=?ScreenReSize@@YAXGG@Z

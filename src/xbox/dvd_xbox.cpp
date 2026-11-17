@@ -458,6 +458,34 @@ BOOL DVDReadAsyncPrio(DVDFileInfo* fileInfo, void* addr, s32 length, s32 offset,
     return TRUE;
 }
 
+// Blocking read (SDK dvdfs.c): the number of bytes read, -1 on a drive error or a refused request, -3 when the
+// command was cancelled. The SDK sleeps the thread until the interrupt handler finishes the command; here the
+// pump runs it, which completes the queue head per call, so the loop ends after as many pumps as there are
+// queued commands.
+s32 DVDReadPrio(DVDFileInfo* fileInfo, void* addr, s32 length, s32 offset, s32 prio)
+{
+    s32 state;
+    int guard;
+
+    if (!DVDReadAsyncPrio(fileInfo, addr, length, offset, 0, prio)) {
+        return -1;
+    }
+    for (guard = 0; guard < 100000; guard++) {
+        state = ((volatile DVDCommandBlock*) &fileInfo->cb)->state;
+        if (state == DVD_STATE_END) {
+            return (s32) fileInfo->cb.transferredSize;
+        }
+        if (state == DVD_STATE_FATAL_ERROR) {
+            return -1;
+        }
+        if (state == DVD_STATE_CANCELED) {
+            return -3;
+        }
+        XDvd_Pump();
+    }
+    return -1;
+}
+
 s32 DVDGetTransferredSize(DVDFileInfo* fileinfo)
 {
     return fileinfo->cb.state == DVD_STATE_WAITING ? 0 : (s32) fileinfo->cb.transferredSize;

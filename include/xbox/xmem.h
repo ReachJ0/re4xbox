@@ -102,4 +102,11 @@ int XMem_InBlock(unsigned int p);
 #define RE4_REGPIN(r) asm(r)
 #endif
 
+// `inline` on a function defined in one .cpp and called from others (GCC 2.95 emitted it, clang does not).
+#ifdef RE4_XBOX
+#define RE4_XINLINE
+#else
+#define RE4_XINLINE inline
+#endif
+
 #endif

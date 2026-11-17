@@ -265,7 +265,7 @@ inline void cModel::setNoSuspend(int onoff)
 }
 
 // 1 when the model is drawn (be_flag bit 1).
-inline int cModel::isTrans()
+RE4_XINLINE int cModel::isTrans()
 {
     int ret = 0;
 

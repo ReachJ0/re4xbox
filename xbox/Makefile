@@ -10,13 +10,13 @@ RE4 := $(abspath $(CURDIR)/..)
 NXDK_CXX = y
 NXDK_SDL = y
 
-LAYERS := ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xbox thread_xbox \
+LAYERS := chp_xbox ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xbox thread_xbox \
           xcard_backend_file xdvd_backend_file xmem_xbox xos_backend_sys xpad_backend_sdl xthread_backend_sys
-SDK_C  := OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
+SDK_C  := texPalette fileCache OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
 
 GEN_C := mtx mtxvec mtx44 mtx44vec vec quat
 GAME := $(filter-out memset_2 yz2asm,$(basename $(notdir $(wildcard $(RE4)/src/game/*.cpp))))
-SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))) $(RE4)/src/xbox/native_asm.cpp $(addprefix $(CURDIR)/gen/,$(addsuffix .c,$(GEN_C))) \
+SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))) $(RE4)/src/xbox/native_asm.cpp $(RE4)/src/xbox/dev_stubs.cpp $(addprefix $(CURDIR)/gen/,$(addsuffix .c,$(GEN_C))) \
        $(addprefix $(RE4)/src/xbox/,$(addsuffix .cpp,$(LAYERS))) \
        $(addprefix $(RE4)/src/lib/,$(addsuffix .c,$(SDK_C)))
 
@@ -32,3 +32,6 @@ $(CURDIR)/gen/%.c: $(RE4)/src/lib/%.c $(RE4)/tools/xbox/strip_ps.py
 
 include $(NXDK_DIR)/Makefile
 LDFLAGS += -errorlimit:0
+LDFLAGS += -demangle:no
+
+LDFLAGS += @$(CURDIR)/alt.inc

@@ -69,3 +69,14 @@ El enlace falla solo por simbolos sin resolver: la lista completa esta en `docs/
 Portado a C para x86: `memset_asm`, `memclr_asm`, `mtxclr_asm` (`src/xbox/native_asm.cpp`).
 SIN portar: `yz2Decode_Decode` (descompresor yz2, ~500 lineas de asm); hoy llama a OSPanic.
 Dialecto: `include/xbox/xcompat.h` (strstr const, `asm(...)` vacio) y `RE4_REGPIN` (pines de registro).
+
+### Simbolos baratos (hecho)
+- 13 simbolos con el mismo nombre y distinto tipo/alias se resuelven con `xbox/alt.inc` (`-alternatename`), generado por
+  `tools/xbox/gen_alternatenames.py` (GCC 2.95 no ponia el tipo en el nombre de las variables; los alias `asm("etiqueta")`
+  se leen del codigo). Hay que regenerarlo cuando cambie la lista de unidades.
+- `inline` en funciones definidas en un .cpp y usadas desde otros: `RE4_XINLINE` (cModel::isTrans, cPlayer::subCharLiveCheck).
+- `src/xbox/dev_stubs.cpp`: servidor de ficheros PC, DBIsDebuggerPresent, PPCSync, `__builtin_new/delete`, `memset_v`, fuente ROM
+  del IPL (OSGetFontEncode/OSInitFont/OSGetFontTexture: sin fuente hasta que haya una de reemplazo; OSGetFontTexture devuelve imagen nula).
+- `src/xbox/chp_xbox.cpp`: DSList y Strcpy/Strcmp/Strlen de CharPipeline (11 comprobaciones en host).
+- `DVDReadPrio` (lectura bloqueante) en `dvd_xbox.cpp` (3 comprobaciones nuevas).
+- Quedan 197 simbolos: GX (96 + `__GXSetIndirectMask` + `GXWGFifo`), audio (AX/AXFX/MIX/SYN/SEQ/AI), VI, Sofdec/ADX.

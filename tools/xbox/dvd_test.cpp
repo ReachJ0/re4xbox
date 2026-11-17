@@ -164,6 +164,11 @@ static void TestRead()
     int zeros = 1; for (int i = 36; i < 64; i++) if (g_buf[0][i]) zeros = 0; CHECK(zeros);
     // offset == length is allowed (all zeros), offset+length < length+32
     ResetCb(); DVDReadAsyncPrio(&a, g_buf[0], 0, 100, ReadCb, 2); XDvd_Pump(); CHECK(g_cbCount == 1 && g_cbResult[0] == 0);
+    // blocking read (DVDReadPrio): size on success, -1 on a refused request
+    memset(g_buf[0], 0xEE, 64);
+    CHECK(DVDReadPrio(&a, g_buf[0], 64, 0, 2) == 64);
+    CHECK(memcmp(g_buf[0], g_files[0].data, 64) == 0);
+    CHECK(DVDReadPrio(&a, g_buf[0] + 4, 32, 0, 2) == -1);
     // refused calls
     unsigned errs = XDvd_ErrorCount();
     CHECK(DVDReadAsyncPrio(&a, g_buf[0] + 4, 32, 0, ReadCb, 2) == FALSE);  // address not 32 aligned
