@@ -104,6 +104,7 @@ vertices directos e indexados con todos los formatos VAT) y entrega primitivas a
 ## Pantalla (pbkit)
 
 - `xvi_backend_sys.cpp` inicia pbkit en el primer retrace y en cada uno limpia el back buffer y hace el swap: negro mientras el juego tiene la pantalla en blanco, azul oscuro de relleno cuando la activa. No dibuja nada del juego: faltan GXCopyDisp (EFB a XFB) y el dibujo NV2A.
+- Traza en pantalla (`xbox/xtrace.h`): el texto de OSReport/OSPanic y las líneas de progreso de `main.cpp` se dibujan sobre cada frame; OSPanic se queda en pantalla (HALTED) en vez de reiniciar. Las excepciones de CPU no se capturan (nxdk no ofrece SetUnhandledExceptionFilter): un fallo así reinicia la máquina.
 - `main.cpp` solo arranca el juego con `make -C xbox RUN_GAME=1`; por defecto sigue siendo la prueba de humo. Ninguna de las dos se ha probado en consola ni en emulador.
 
 ## Montar nxdk y compilar (Linux, macOS o WSL2)

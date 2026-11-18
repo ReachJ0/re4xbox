@@ -17,6 +17,7 @@
 #include <hal/debug.h>
 #include <hal/xbox.h>
 #include <xboxkrnl/xboxkrnl.h>
+#include "xbox/xtrace.h"
 #else
 #include <sys/mman.h>
 #include <unistd.h>
@@ -54,6 +55,7 @@ void XOsBackend_Log(const char* text)
 {
 #ifdef NXDK
     DbgPrint("%s", text);
+    XTrace_Add(text);
 #else
     fputs(text, stderr);
 #endif
@@ -62,7 +64,7 @@ void XOsBackend_Log(const char* text)
 void XOsBackend_Halt(void)
 {
 #ifdef NXDK
-    HalReturnToFirmware(HalQuickRebootRoutine);
+    XTrace_HaltForever();   // development: keep the panic text on the screen instead of rebooting
 #else
     abort();
 #endif
