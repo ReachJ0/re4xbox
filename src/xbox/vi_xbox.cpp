@@ -24,6 +24,13 @@ static u16 s_w, s_h, s_flushedW, s_flushedH;
 static u32 s_flushedTv, s_flushedScan;
 static unsigned long long s_base, s_period;
 static int s_inRetrace;
+static int s_traceBudget;  // development: how many retraces to describe on the console screen (set by VIFlush)
+#ifdef NXDK
+#include "xbox/xtrace.h"
+#define VI_TRACE(s) XTrace_Add(s "\n")
+#else
+#define VI_TRACE(s)
+#endif
 
 static unsigned long long PeriodFor(u32 tv)
 {
@@ -33,6 +40,11 @@ static unsigned long long PeriodFor(u32 tv)
 
 static void OneRetrace(void)
 {
+    int tr = s_traceBudget > 0;
+    if (tr) {
+        s_traceBudget--;
+        VI_TRACE("VI: retrace begin");
+    }
     if (s_pre) {
         s_pre(s_retraces);
     }
@@ -47,9 +59,18 @@ static void OneRetrace(void)
     }
     s_retraces++;
     s_field ^= 1;
+    if (tr) {
+        VI_TRACE("VI: present");
+    }
     XViBackend_Present(s_curFb, s_curBlack, s_w, s_h);
+    if (tr) {
+        VI_TRACE("VI: post callback");
+    }
     if (s_post) {
         s_post(s_retraces);
+    }
+    if (tr) {
+        VI_TRACE("VI: retrace end");
     }
 }
 
@@ -138,7 +159,10 @@ void VISetBlack(BOOL black)
 
 void VIFlush(void)
 {
+    s_traceBudget = 4;
+    VI_TRACE("VIFlush: enter");
     Advance();
+    VI_TRACE("VIFlush: advanced");
     if (!s_haveMode) {  // never configured: keep the current mode
         s_flushedTv = s_tv;
         s_flushedScan = s_scan;

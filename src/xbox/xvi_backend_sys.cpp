@@ -73,6 +73,8 @@ void XTrace_Add(const char* text)
     Unlock();
 }
 
+static unsigned s_busyTimeouts, s_finishTimeouts;   // waits on pbkit that gave up (see DrawFrame)
+
 static int s_state;   // 0 = pbkit not started, 1 = running, -1 = pbkit failed: present nothing
 static unsigned s_presents;
 
@@ -105,21 +107,34 @@ static void DrawFrame(const void* fb, int black, const char* status)
     Unlock();
     pb_print("%s\n", status);   // last row: it keeps changing while the game is alive
     pb_draw_text_screen();
+    // Both waits give up after 200 ms (a frame is 17 ms): a stuck GPU would otherwise freeze the whole game
+    // with nothing on screen to say why. The counts are in the status line.
+    DWORD t0 = GetTickCount();
     while (pb_busy()) {
+        if (GetTickCount() - t0 > 200) {
+            s_busyTimeouts++;
+            break;
+        }
     }
+    t0 = GetTickCount();
     while (pb_finished()) {   // too early for the swap: wait, this paces the loop to the real retrace
+        if (GetTickCount() - t0 > 200) {
+            s_finishTimeouts++;
+            break;
+        }
     }
 }
 
 void XViBackend_Present(const void* fb, int black, int, int)
 {
-    char status[64];
+    char status[96];
     EnsurePb();
     if (s_state < 0) {
         return;
     }
     s_presents++;
-    snprintf(status, sizeof(status), "present %u black=%d fb=%p", s_presents, black, fb);
+    snprintf(status, sizeof(status), "present %u black=%d busyTO=%u finTO=%u", s_presents, black, s_busyTimeouts,
+             s_finishTimeouts);
     DrawFrame(fb, black, status);
 }
 
