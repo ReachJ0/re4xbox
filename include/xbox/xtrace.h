@@ -20,4 +20,11 @@ void XTrace_HaltForever(void);
 }
 #endif
 
+// A progress line; compiles to nothing outside the Xbox build, so the GameCube code is unchanged.
+#ifdef RE4_XBOX
+#define RE4_TRACE(s) XTrace_Add(s "\n")
+#else
+#define RE4_TRACE(s)
+#endif
+
 #endif

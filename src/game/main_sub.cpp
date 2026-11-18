@@ -95,36 +95,57 @@ static u8 Line;
 
 // Boot: TV mode, two XFBs at 0x80460000, the 0x70000-byte GX FIFO at 0x803F0000, GXInit, the
 // screen GX state, first VI configure and the 512x448 screen size.
+#ifdef RE4_XBOX
+#include "xbox/xtrace.h"
+#else
+#define RE4_TRACE(s)
+#endif
+
 void Render_init()
 {
     GXRenderModeObj* rm = &Rmode;
 
     SetTvMode(rm);
+    RE4_TRACE("Render_init: SetTvMode");
     pFrame_buff[0] = (void*) 0x80460000;
     pCurrent_buff = pFrame_buff[1] =
         (void*) (0x80460000 + VIPadFrameBufferWidth(rm->viWidth) * rm->xfbHeight * 2);
     DefaultFifo = (void*) 0x803F0000;
     VIConfigure(rm);
+    RE4_TRACE("Render_init: VIConfigure");
     DefaultFifoObj = GXInit(DefaultFifo, 0x70000);
     ScreenGXSet();
+    RE4_TRACE("Render_init: ScreenGXSet");
     GXSetDispCopyYScale((f32) rm->xfbHeight / (f32) rm->efbHeight);
+    RE4_TRACE("Render_init: GXSetDispCopyYScale");
     GXSetDispCopySrc(0, 0, rm->fbWidth, rm->xfbHeight);
+    RE4_TRACE("Render_init: GXSetDispCopySrc");
     GXSetDispCopyDst(rm->fbWidth, rm->xfbHeight);
+    RE4_TRACE("Render_init: GXSetDispCopyDst");
     GXSetCopyFilter(rm->aa, rm->sample_pattern, 1, rm->vfilter);
+    RE4_TRACE("Render_init: GXSetCopyFilter");
     if (rm->aa) {
         GXSetPixelFmt(2, 0);
     } else {
         GXSetPixelFmt(0, 0);
     }
     GXSetPixelFmt(1, 0);
+    RE4_TRACE("Render_init: GXSetPixelFmt");
     GXSetZCompLoc(0);
+    RE4_TRACE("Render_init: GXSetZCompLoc");
     GXCopyDisp(pCurrent_buff, 0);
+    RE4_TRACE("Render_init: GXCopyDisp");
     GXSetDispCopyGamma(0);
+    RE4_TRACE("Render_init: GXSetDispCopyGamma");
     VISetNextFrameBuffer(pFrame_buff[0]);
+    RE4_TRACE("Render_init: VISetNextFrameBuffer");
     pCurrent_buff = pFrame_buff[1];
     VIFlush();
+    RE4_TRACE("Render_init: VIFlush");
     VIWaitForRetrace();
+    RE4_TRACE("Render_init: VIWaitForRetrace");
     ScreenReSize(512, 448);
+    RE4_TRACE("Render_init: ScreenReSize");
 }
 
 // Frame start: field-rendering viewport jitter and the default (dim) copy filter.

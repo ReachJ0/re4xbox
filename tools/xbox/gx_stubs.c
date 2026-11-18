@@ -21,3 +21,6 @@ void PPCSync(void) {}
 u32 xos_cntlzw(u32 v) { return v ? __builtin_clz(v) : 32; }
 u32 VIGetTvFormat(void) { return VI_NTSC; }
 void OSRegisterVersion(const char* v) {}
+
+/* GXInit.c leaves progress lines for the console screen (xbox/xtrace.h); the host test has no screen. */
+void XTrace_Add(const char* text) { (void) text; }

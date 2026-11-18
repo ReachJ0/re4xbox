@@ -258,6 +258,12 @@ void __GXInitRevisionBits(void) {
     }
 }
 
+#ifdef RE4_XBOX
+#include "xbox/xtrace.h"
+#else
+#define RE4_TRACE(s)
+#endif
+
 GXFifoObj* GXInit(void* base, u32 size) {
     static u32 resetFuncRegistered;
     u32 i;
@@ -267,6 +273,7 @@ GXFifoObj* GXInit(void* base, u32 size) {
     OSRegisterVersion(__GXVersion);
 #ifdef RE4_XBOX
     XGx_Init();
+    RE4_TRACE("GXInit: XGx_Init");
 #endif
 
     __GXData->inDispList = FALSE;
@@ -279,15 +286,18 @@ GXFifoObj* GXInit(void* base, u32 size) {
     __GXData->tevTcEnab = FALSE;
     
     GXSetMisc(GX_MT_XF_FLUSH, 0);
+    RE4_TRACE("GXInit: GXSetMisc");
 
     __piReg = OSPhysicalToUncached(0xC003000);
     __cpReg = OSPhysicalToUncached(0xC000000);
     __peReg = OSPhysicalToUncached(0xC001000);
     __memReg = OSPhysicalToUncached(0xC004000);
     __GXFifoInit();
+    RE4_TRACE("GXInit: __GXFifoInit");
     GXInitFifoBase(&FifoObj, base, size);
     GXSetCPUFifo(&FifoObj);
     GXSetGPFifo(&FifoObj);
+    RE4_TRACE("GXInit: fifos set");
 
     if (!resetFuncRegistered) {
         OSRegisterResetFunction(&GXResetFuncInfo);
@@ -295,7 +305,9 @@ GXFifoObj* GXInit(void* base, u32 size) {
     }
 
     __GXPEInit();
+    RE4_TRACE("GXInit: __GXPEInit");
     EnableWriteGatherPipe();
+    RE4_TRACE("GXInit: write gather");
 
     __GXData->genMode = 0;
     SET_REG_FIELD(0, __GXData->genMode, 8, 24, 0);
@@ -360,6 +372,7 @@ GXFifoObj* GXInit(void* base, u32 size) {
     GX_WRITE_RAS_REG(reg);
 
     __GXInitRevisionBits();
+    RE4_TRACE("GXInit: revision bits");
 
     for (i = 0; i < 8; i++) {
         GXInitTexCacheRegion(&__GXData->TexRegions0[i], GX_FALSE, GXTexRegionAddrTable[i],
