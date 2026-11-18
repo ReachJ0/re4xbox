@@ -94,3 +94,9 @@ vertices directos e indexados con todos los formatos VAT) y entrega primitivas a
   `GXTexObj` con punteros no caben (ASan da falso positivo); en Xbox son de 32 bits.
 - Estado: 0 simbolos GX sin resolver en el enlace de nxdk. FALTA el backend de dibujo (NV2A): transformacion/iluminacion,
   texturas GC -> RGBA, TEV -> combinadores, copia de EFB, y la capa VI.
+
+## VI y audio (stubs)
+
+- `src/xbox/vi_xbox.cpp` + `xvi_backend_sys.cpp`: VI con reloj de retrace virtual (ver `tools/xbox/run_vi_test.sh`). La presentación (`XViBackend_Present`) está vacía hasta que exista el renderer NV2A.
+- `src/xbox/audio_stubs.cpp`: AX/AXFX/AXART/MIX/SYN/SEQ/AI, ADX y Sofdec (`mw*`) silenciosos. `AXAcquireVoice` devuelve NULL y `mwPlyCreateSofdec` devuelve NULL: sin sonido ni vídeos. Sin verificar si el juego tolera NULL en todos los usos.
+- Estado: `default.xbe` enlaza con 0 símbolos sin resolver. Nada probado en consola ni emulador.
