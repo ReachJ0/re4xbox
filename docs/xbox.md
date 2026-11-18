@@ -100,3 +100,8 @@ vertices directos e indexados con todos los formatos VAT) y entrega primitivas a
 - `src/xbox/vi_xbox.cpp` + `xvi_backend_sys.cpp`: VI con reloj de retrace virtual (ver `tools/xbox/run_vi_test.sh`). La presentación (`XViBackend_Present`) está vacía hasta que exista el renderer NV2A.
 - `src/xbox/audio_stubs.cpp`: AX/AXFX/AXART/MIX/SYN/SEQ/AI, ADX y Sofdec (`mw*`) silenciosos. `AXAcquireVoice` devuelve NULL y `mwPlyCreateSofdec` devuelve NULL: sin sonido ni vídeos. Sin verificar si el juego tolera NULL en todos los usos.
 - Estado: `default.xbe` enlaza con 0 símbolos sin resolver. Nada probado en consola ni emulador.
+
+## Pantalla (pbkit)
+
+- `xvi_backend_sys.cpp` inicia pbkit en el primer retrace y en cada uno limpia el back buffer y hace el swap: negro mientras el juego tiene la pantalla en blanco, azul oscuro de relleno cuando la activa. No dibuja nada del juego: faltan GXCopyDisp (EFB a XFB) y el dibujo NV2A.
+- `main.cpp` solo arranca el juego con `make -C xbox RUN_GAME=1`; por defecto sigue siendo la prueba de humo. Ninguna de las dos se ha probado en consola ni en emulador.

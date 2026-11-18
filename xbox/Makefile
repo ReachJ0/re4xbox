@@ -21,7 +21,7 @@ SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))
        $(addprefix $(RE4)/src/lib/,$(addsuffix .c,$(SDK_C)))
 
 # what the sources of the game expect
-RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing
+RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing $(if $(RUN_GAME),-DRE4_RUN_GAME)
 RE4_INC  = -I$(RE4)/include -I$(RE4)/src/lib
 CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w
 CXXFLAGS += $(RE4_DEFS) $(RE4_INC) -w

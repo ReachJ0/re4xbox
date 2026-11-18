@@ -13,6 +13,9 @@ int main(void)
     debugPrint("RE4 / original Xbox: platform layers\n");
     OSInit();
     debugPrint("OSInit ok, arena %p .. %p\n", OSGetArenaLo(), OSGetArenaHi());
+#ifdef RE4_RUN_GAME
+    re4_main();   // make RE4_RUN_GAME=1 (see docs/xbox.md): runs the game; not verified to boot
+#endif
     for (;;) {
         Sleep(1000);
     }
