@@ -39,8 +39,8 @@ void XViBackend_SleepUntilUs(unsigned long long t)
 
 // ---- development trace (xbox/xtrace.h) ---------------------------------------------------------------------
 
-#define TRACE_LINES 24
-#define TRACE_COLS 70
+#define TRACE_LINES 16
+#define TRACE_COLS 50
 static char s_lines[TRACE_LINES][TRACE_COLS + 1];
 static int s_head;                       // index of the line being written
 static int s_col;

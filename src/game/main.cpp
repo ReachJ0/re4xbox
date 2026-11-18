@@ -105,6 +105,13 @@ GLOBAL_WK* pG = &Global;
 SYSTEM_SAVE_WORK* pSys = &SystemSave;
 int vsync_cnt = 0;
 
+#ifdef RE4_XBOX
+#include "xbox/xtrace.h"
+#define RE4_TRACE(s) XTrace_Add(s "\n")   // development: progress line on the Xbox screen
+#else
+#define RE4_TRACE(s)
+#endif
+
 RESET_KEEP_WORK* pRK;
 char* pUser_name;
 void* roomInfoAddr;
@@ -121,9 +128,11 @@ int main()
     int ret;
 
     systemStartInit();
+    RE4_TRACE("systemStartInit done");
 RESTART:
     {
         systemRestartInit();
+        RE4_TRACE("systemRestartInit done");
         if (pRK->reset_flag) {
             pSys->Config_flg = pRK->Config_flg;
             pSys->language = pRK->language;
@@ -153,6 +162,7 @@ RESTART:
             DbgFlagOff(pG, DBG_FOG_FAR_GREEN);
         }
         TaskExec(0, Title_task, 0);
+        RE4_TRACE("frame loop");
         for (;;) {
             StopwatchInit();
             ProcessTickInit();
@@ -254,8 +264,11 @@ void systemStartInit()
 {
     memclr_asm(pG, sizeof(GLOBAL_WK));
     OSInit();
+    RE4_TRACE("OSInit");
     setLanguage();
+    RE4_TRACE("setLanguage");
     RomFontSetting();
+    RE4_TRACE("RomFontSetting");
     if (OSGetConsoleType() & 0xF0000000) {
         pG->IsDevConsole = 1;
     }
@@ -266,16 +279,26 @@ void systemStartInit()
         }
     }
     ExceptionInit();
+    RE4_TRACE("ExceptionInit");
     OSInitAlarm();
+    RE4_TRACE("OSInitAlarm");
     VIInit();
+    RE4_TRACE("VIInit");
     systemVISetBlack(1);
+    RE4_TRACE("systemVISetBlack");
     LCEnable();
+    RE4_TRACE("LCEnable");
     VIWaitForRetrace();
+    RE4_TRACE("VIWaitForRetrace");
     VISetPostRetraceCallback(postVSyncCallback);
+    RE4_TRACE("VISetPostRetraceCallback");
     Dvd.Init();
+    RE4_TRACE("Dvd.Init");
     CardInit();
+    RE4_TRACE("CardInit");
 #ifdef RE4_XBOX
     XPs_InitGQR();
+    RE4_TRACE("XPs_InitGQR");
 #else
     asm("li 3, 4\n"
         "oris 3, 3, 4\n"
@@ -294,24 +317,40 @@ void systemStartInit()
         : "r3");
 #endif
     SystemMemInit();
+    RE4_TRACE("SystemMemInit");
     if (pG->IsDevConsole == 1) {
         CardDbgCacheSet();
     }
     TaskSchedulerInit();
+    RE4_TRACE("TaskSchedulerInit");
     systemScreenInit();
+    RE4_TRACE("systemScreenInit");
     Render_init();
+    RE4_TRACE("Render_init");
     LightSetInit();
+    RE4_TRACE("LightSetInit");
     RndInit(0xD37);
+    RE4_TRACE("RndInit");
     InitOt();
+    RE4_TRACE("InitOt");
     SndInit();
+    RE4_TRACE("SndInit");
     SofdecInit();
+    RE4_TRACE("SofdecInit");
     IdSys.gameInit(0x80);
+    RE4_TRACE("IdSys.gameInit");
     IdTexGameInit();
+    RE4_TRACE("IdTexGameInit");
     EprintfInit();
+    RE4_TRACE("EprintfInit");
     LogInit();
+    RE4_TRACE("LogInit");
     init_dbmodule();
+    RE4_TRACE("init_dbmodule");
     Dvd.SizeTableRead();
+    RE4_TRACE("Dvd.SizeTableRead");
     cMes.init();
+    RE4_TRACE("cMes.init");
 }
 
 // At boot and after every soft reset: pad, clears the game part of the global work, heap 1
