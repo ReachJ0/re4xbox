@@ -20,11 +20,13 @@ SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))
        $(addprefix $(RE4)/src/xbox/,$(addsuffix .cpp,$(LAYERS))) \
        $(addprefix $(RE4)/src/lib/,$(addsuffix .c,$(SDK_C)))
 
-# what the sources of the game expect
+# what the sources of the game expect. They apply to OUR objects only: a global CFLAGS would also reach nxdk's own
+# libraries (its crt0 would then call re4_main instead of main) when they are built in the same make run.
 RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing $(if $(RUN_GAME),-DRE4_RUN_GAME)
 RE4_INC  = -I$(RE4)/include -I$(RE4)/src/lib
-CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w
-CXXFLAGS += $(RE4_DEFS) $(RE4_INC) -w
+RE4_OBJS = $(addsuffix .obj,$(basename $(SRCS)))
+$(RE4_OBJS): CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w
+$(RE4_OBJS): CXXFLAGS += $(RE4_DEFS) $(RE4_INC) -w
 
 $(CURDIR)/gen/%.c: $(RE4)/src/lib/%.c $(RE4)/tools/xbox/strip_ps.py
 	@mkdir -p $(CURDIR)/gen
