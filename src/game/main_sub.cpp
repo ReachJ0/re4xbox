@@ -281,7 +281,9 @@ static int ScreenIsOrigin()
 void ScreenGXSet()
 {
     GXSetViewport(Screen.x, Screen.y, Screen.width, Screen.height, 0.0f, 1.0f);
+    RE4_TRACE("ScreenGXSet: GXSetViewport");
     SetScissorState();
+    RE4_TRACE("ScreenGXSet: SetScissorState");
 }
 
 // Changes the EFB/screen size (e.g. 512x448 normal, smaller for the movie player), reconfigures VI
@@ -296,15 +298,25 @@ void ScreenReSize(u16 w, u16 h)
     rm->fbWidth = w;
     rm->efbHeight = h;
     DCFlushRange(pFrame_buff[0], 0x8C000);
+    RE4_TRACE("ScreenReSize: DCFlushRange");
     DCFlushRange(pFrame_buff[1], 0x8C000);
+    RE4_TRACE("ScreenReSize: DCFlushRange");
     VIConfigure(rm);
+    RE4_TRACE("ScreenReSize: VIConfigure");
     VIFlush();
+    RE4_TRACE("ScreenReSize: VIFlush");
     ScreenGXSet();
+    RE4_TRACE("ScreenReSize: ScreenGXSet");
     GXSetDispCopyYScale((f32) rm->xfbHeight / (f32) rm->efbHeight);
+    RE4_TRACE("ScreenReSize: GXSetDispCopyYScale");
     GXSetDispCopySrc(0, 0, rm->fbWidth, rm->xfbHeight);
+    RE4_TRACE("ScreenReSize: GXSetDispCopySrc");
     GXSetDispCopyDst(rm->fbWidth, rm->xfbHeight);
+    RE4_TRACE("ScreenReSize: GXSetDispCopyDst");
     C_MTXOrtho(mtx, 0.0f, 448.0f, 0.0f, (f32) rm->fbWidth, 0.0f, -10000.0f);
+    RE4_TRACE("ScreenReSize: C_MTXOrtho");
     GXSetProjection(mtx, 1);
+    RE4_TRACE("ScreenReSize: GXSetProjection");
 }
 
 // Sets the Screen size only (viewport/scissor follow on the next ScreenGXSet).

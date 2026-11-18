@@ -39,7 +39,7 @@ void XViBackend_SleepUntilUs(unsigned long long t)
 
 // ---- development trace (xbox/xtrace.h) ---------------------------------------------------------------------
 
-#define TRACE_LINES 16
+#define TRACE_LINES 15
 #define TRACE_COLS 50
 static char s_lines[TRACE_LINES][TRACE_COLS + 1];
 static int s_head;                       // index of the line being written
@@ -95,7 +95,6 @@ static void DrawFrame(const void* fb, int black, const char* status)
     pb_erase_depth_stencil_buffer(0, 0, w, h);
     pb_fill(0, 0, w, h, (black || !fb) ? 0x00000000 : 0x00102060);
     pb_erase_text_screen();
-    pb_print("%s\n", status);
     Lock();
     for (int i = 1; i <= TRACE_LINES; i++) {   // oldest first, the line being written last
         const char* l = s_lines[(s_head + i) % TRACE_LINES];
@@ -104,6 +103,7 @@ static void DrawFrame(const void* fb, int black, const char* status)
         }
     }
     Unlock();
+    pb_print("%s\n", status);   // last row: it keeps changing while the game is alive
     pb_draw_text_screen();
     while (pb_busy()) {
     }
