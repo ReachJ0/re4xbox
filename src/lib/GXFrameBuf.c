@@ -494,7 +494,7 @@ void GXCopyDisp(void* dest, GXBool clear) {
     GX_WRITE_RAS_REG(__GXData->cpDispSize);
     GX_WRITE_RAS_REG(__GXData->cpDispStride);
 
-    phyAddr = (u32)dest & 0x3FFFFFFF;
+    phyAddr = GX_PHYS(dest);
     reg = 0;
     SET_REG_FIELD(1872, reg, 21, 0, phyAddr >> 5);
     SET_REG_FIELD(1876, reg, 8, 24, 0x4B);
@@ -561,7 +561,7 @@ void GXCopyTex(void* dest, GXBool clear) {
     GX_WRITE_RAS_REG(__GXData->cpTexSize);
     GX_WRITE_RAS_REG(__GXData->cpTexStride);
 
-    phyAddr = (u32)dest & 0x3FFFFFFF;
+    phyAddr = GX_PHYS(dest);
     reg = 0;
     SET_REG_FIELD(1965, reg, 21, 0, phyAddr >> 5);
     SET_REG_FIELD(1965, reg, 8, 24, 0x4B);

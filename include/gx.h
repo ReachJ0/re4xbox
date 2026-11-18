@@ -76,61 +76,61 @@ extern volatile WGPipe GXWGFifo[];
 
 static inline void GXPosition3f32(f32 x, f32 y, f32 z)
 {
-    GXWGFifo->f32 = x;
-    GXWGFifo->f32 = y;
-    GXWGFifo->f32 = z;
+    GXFIFOP_WRITE(f32, x);
+    GXFIFOP_WRITE(f32, y);
+    GXFIFOP_WRITE(f32, z);
 }
 
 static inline void GXPosition3s16(s16 x, s16 y, s16 z)
 {
-    GXWGFifo->s16 = x;
-    GXWGFifo->s16 = y;
-    GXWGFifo->s16 = z;
+    GXFIFOP_WRITE(s16, x);
+    GXFIFOP_WRITE(s16, y);
+    GXFIFOP_WRITE(s16, z);
 }
 
 static inline void GXColor4u8(u8 r, u8 g, u8 b, u8 a)
 {
-    GXWGFifo->u8 = r;
-    GXWGFifo->u8 = g;
-    GXWGFifo->u8 = b;
-    GXWGFifo->u8 = a;
+    GXFIFOP_WRITE(u8, r);
+    GXFIFOP_WRITE(u8, g);
+    GXFIFOP_WRITE(u8, b);
+    GXFIFOP_WRITE(u8, a);
 }
 
 static inline void GXNormal3f32(f32 x, f32 y, f32 z)
 {
-    GXWGFifo->f32 = x;
-    GXWGFifo->f32 = y;
-    GXWGFifo->f32 = z;
+    GXFIFOP_WRITE(f32, x);
+    GXFIFOP_WRITE(f32, y);
+    GXFIFOP_WRITE(f32, z);
 }
 
 static inline void GXNormal3s8(s8 x, s8 y, s8 z)
 {
-    GXWGFifo->s8 = x;
-    GXWGFifo->s8 = y;
-    GXWGFifo->s8 = z;
+    GXFIFOP_WRITE(s8, x);
+    GXFIFOP_WRITE(s8, y);
+    GXFIFOP_WRITE(s8, z);
 }
 
 static inline void GXTexCoord2f32(f32 s, f32 t)
 {
-    GXWGFifo->f32 = s;
-    GXWGFifo->f32 = t;
+    GXFIFOP_WRITE(f32, s);
+    GXFIFOP_WRITE(f32, t);
 }
 
 static inline void GXMatrixIndex1u8(u8 idx)
 {
-    GXWGFifo->u8 = idx;
+    GXFIFOP_WRITE(u8, idx);
 }
 
 static inline void GXPosition2u16(u16 x, u16 y)
 {
-    GXWGFifo->u16 = x;
-    GXWGFifo->u16 = y;
+    GXFIFOP_WRITE(u16, x);
+    GXFIFOP_WRITE(u16, y);
 }
 
 static inline void GXTexCoord2s16(s16 s, s16 t)
 {
-    GXWGFifo->s16 = s;
-    GXWGFifo->s16 = t;
+    GXFIFOP_WRITE(s16, s);
+    GXFIFOP_WRITE(s16, t);
 }
 #endif
 

@@ -160,10 +160,10 @@ void GXSetCPUFifo(GXFifoObj* fifo) {
     if (CPUFifo == GPFifo) {
         u32 reg = 0;
 
-        GX_SET_PI_REG(3, (u32)realFifo->base & 0x3FFFFFFF);
-        GX_SET_PI_REG(4, (u32)realFifo->top & 0x3FFFFFFF);
+        GX_SET_PI_REG(3, GX_PHYS(realFifo->base));
+        GX_SET_PI_REG(4, GX_PHYS(realFifo->top));
 
-        SET_REG_FIELD(LINE(691, 691, 695), reg, 21, 5, (u32)realFifo->wrPtr >> 5);
+        SET_REG_FIELD(LINE(691, 691, 695), reg, 21, 5, GX_PHYS5(realFifo->wrPtr));
         SET_REG_FIELD(LINE(691, 691, 695), reg, 1, 26, 0);
         GX_SET_PI_REG(5, reg);
 
@@ -182,9 +182,9 @@ void GXSetCPUFifo(GXFifoObj* fifo) {
 
         __GXWriteFifoIntEnable(0, 0);
         reg = 0;
-        GX_SET_PI_REG(3, (u32)realFifo->base & 0x3FFFFFFF);
-        GX_SET_PI_REG(4, (u32)realFifo->top & 0x3FFFFFFF);
-        SET_REG_FIELD(LINE(726, 726, 730), reg, 21, 5, (u32)realFifo->wrPtr >> 5);
+        GX_SET_PI_REG(3, GX_PHYS(realFifo->base));
+        GX_SET_PI_REG(4, GX_PHYS(realFifo->top));
+        SET_REG_FIELD(LINE(726, 726, 730), reg, 21, 5, GX_PHYS5(realFifo->wrPtr));
         SET_REG_FIELD(LINE(726, 726, 730), reg, 1, 26, 0);
         GX_SET_PI_REG(5, reg);
     }
@@ -211,11 +211,11 @@ void GXSetGPFifo(GXFifoObj* fifo) {
     GX_SET_CP_REG(28, (u32)realFifo->rdPtr & 0xFFFF);
     GX_SET_CP_REG(20, (u32)realFifo->hiWatermark & 0xFFFF);
     GX_SET_CP_REG(22, (u32)realFifo->loWatermark & 0xFFFF);
-    GX_SET_CP_REG(17, ((u32)realFifo->base & 0x3FFFFFFF) >> 16);
-    GX_SET_CP_REG(19, ((u32)realFifo->top & 0x3FFFFFFF) >> 16);
+    GX_SET_CP_REG(17, (GX_PHYS(realFifo->base)) >> 16);
+    GX_SET_CP_REG(19, (GX_PHYS(realFifo->top)) >> 16);
     GX_SET_CP_REG(25, realFifo->count >> 16);
-    GX_SET_CP_REG(27, ((u32)realFifo->wrPtr & 0x3FFFFFFF) >> 16);
-    GX_SET_CP_REG(29, ((u32)realFifo->rdPtr & 0x3FFFFFFF) >> 16);
+    GX_SET_CP_REG(27, (GX_PHYS(realFifo->wrPtr)) >> 16);
+    GX_SET_CP_REG(29, (GX_PHYS(realFifo->rdPtr)) >> 16);
     GX_SET_CP_REG(21, (u32)realFifo->hiWatermark >> 16);
     GX_SET_CP_REG(23, (u32)realFifo->loWatermark >> 16);
 
@@ -585,7 +585,7 @@ volatile void* GXRedirectWriteGatherPipe(void* ptr) {
     CPUFifo->wrPtr = OSPhysicalToCached(GX_GET_PI_REG(5) & 0xFBFFFFFF);
     GX_SET_PI_REG(3, 0);
     GX_SET_PI_REG(4, 0x04000000);
-    SET_REG_FIELD(LINE(1527, 1527, 1584), reg, 21, 5, ((u32)ptr & 0x3FFFFFFF) >> 5);
+    SET_REG_FIELD(LINE(1527, 1527, 1584), reg, 21, 5, (GX_PHYS(ptr)) >> 5);
     reg &= 0xFBFFFFFF;
     GX_SET_PI_REG(5, reg);
 
@@ -608,15 +608,15 @@ void GXRestoreWriteGatherPipe(void) {
 
     enabled = OSDisableInterrupts();
     for (i = 0; i < 31; i++) {
-        GXWGFifo.u8 = 0;
+        GXFIFO_WRITE(u8, 0);
     }
 
     PPCSync();
     while (PPCMfwpar() & 1) {}
     PPCMtwpar((u32)OSUncachedToPhysical((void *)GXFIFO_ADDR));
-    GX_SET_PI_REG(3, (u32)CPUFifo->base & 0x3FFFFFFF);
-    GX_SET_PI_REG(4, (u32)CPUFifo->top & 0x3FFFFFFF);
-    SET_REG_FIELD(1578, reg, 21, 5, ((u32)CPUFifo->wrPtr & 0x3FFFFFFF) >> 5);
+    GX_SET_PI_REG(3, GX_PHYS(CPUFifo->base));
+    GX_SET_PI_REG(4, GX_PHYS(CPUFifo->top));
+    SET_REG_FIELD(1578, reg, 21, 5, (GX_PHYS(CPUFifo->wrPtr)) >> 5);
     reg &= 0xFBFFFFFF;
     GX_SET_PI_REG(5, reg);
     if (CPGPLinked) {

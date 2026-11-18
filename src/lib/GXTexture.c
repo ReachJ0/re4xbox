@@ -220,7 +220,7 @@ void GXInitTexObj(GXTexObj* obj, void* image_ptr, u16 width, u16 height, GXTexFm
     SET_REG_FIELD(647, t->image0, 10, 10, height - 1);
     SET_REG_FIELD(648, t->image0, 4, 20, format & 0xF);
     ASSERTMSGLINEV(654, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObj", "image");
-    imageBase = (u32)((u32)image_ptr >> 5) & 0x01FFFFFF;
+    imageBase = (u32)(GX_PHYS5(image_ptr)) & 0x01FFFFFF;
     SET_REG_FIELD(656, t->image3, 21, 0, imageBase);
 
     switch (format & 0xF) {
@@ -329,7 +329,7 @@ void GXInitTexObjData(GXTexObj* obj, void* image_ptr) {
     ASSERTMSGLINE(835, obj, "Texture Object Pointer is null");
     CHECK_GXBEGIN(837, "GXInitTexObjData");
     ASSERTMSGLINEV(840, ((u32)image_ptr & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTexObjData", "image");
-    imageBase = ((u32)image_ptr >> 5) & 0x01FFFFFF;
+    imageBase = (GX_PHYS5(image_ptr)) & 0x01FFFFFF;
     SET_REG_FIELD(843, t->image3, 21, 0, imageBase);
 }
 
@@ -668,7 +668,7 @@ void GXInitTlutObj(GXTlutObj* tlut_obj, void* lut, GXTlutFmt fmt, u16 n_entries)
     ASSERTMSGLINEV(1356, ((u32)lut & 0x1F) == 0, "%s: %s pointer not aligned to 32B", "GXInitTlutObj", "Tlut");
     t->tlut = 0;
     SET_REG_FIELD(1359, t->tlut, 2, 10, fmt);
-    SET_REG_FIELD(1360, t->loadTlut0, 21, 0, ((u32)lut & 0x3FFFFFFF) >> 5);
+    SET_REG_FIELD(1360, t->loadTlut0, 21, 0, (GX_PHYS(lut)) >> 5);
     SET_REG_FIELD(1361, t->loadTlut0, 8, 24, 0x64);
     t->numEntries = n_entries;
 }

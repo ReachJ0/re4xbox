@@ -518,7 +518,7 @@ void GXSetArray(GXAttr attr, void* base_ptr, u8 stride) {
 
     CHECK_ATTRNAME5(966, attr);
     cpAttr = attr - GX_VA_POS;
-    phyAddr = (u32)base_ptr & 0x3FFFFFFF;
+    phyAddr = GX_PHYS(base_ptr);
 
     GX_WRITE_SOME_REG2(8, cpAttr | 0xA0, phyAddr, cpAttr - 12);
     GX_WRITE_SOME_REG3(8, cpAttr | 0xB0, stride, cpAttr - 12);

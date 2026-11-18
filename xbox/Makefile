@@ -10,9 +10,9 @@ RE4 := $(abspath $(CURDIR)/..)
 NXDK_CXX = y
 NXDK_SDL = y
 
-LAYERS := chp_xbox ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xbox thread_xbox \
+LAYERS := chp_xbox gp_xbox gx_xbox ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xbox thread_xbox \
           xcard_backend_file xdvd_backend_file xmem_xbox xos_backend_sys xpad_backend_sdl xthread_backend_sys
-SDK_C  := texPalette fileCache OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
+SDK_C  := GXAttr GXBump GXDisplayList GXDraw GXFifo GXFrameBuf GXGeometry GXInit GXLight GXMisc GXPerf GXPixel GXTev GXTexture GXTransform texPalette fileCache OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
 
 GEN_C := mtx mtxvec mtx44 mtx44vec vec quat
 GAME := $(filter-out memset_2 yz2asm,$(basename $(notdir $(wildcard $(RE4)/src/game/*.cpp))))

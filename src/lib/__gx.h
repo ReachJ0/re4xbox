@@ -7,19 +7,33 @@
 extern "C" {
 #endif
 
+// physical address of a cached pointer (the registers hold physical addresses)
+#ifdef RE4_XBOX
+#define GX_PHYS(p) ((u32) OSCachedToPhysical((void*) (p)))
+#else
+#define GX_PHYS(p) (u32)(p) & 0x3FFFFFFF
+#endif
+
+// the same, already shifted to 32-byte units (the GameCube code shifts the unmasked pointer)
+#ifdef RE4_XBOX
+#define GX_PHYS5(p) (GX_PHYS(p) >> 5)
+#else
+#define GX_PHYS5(p) (u32)(p) >> 5
+#endif
+
 // FIFO WRITE
 
 #define GX_WRITE_U8(ub)     \
-    GXWGFifo.u8 = (u8)(ub)
+    GXFIFO_WRITE(u8, (u8)(ub))
 
 #define GX_WRITE_U16(us)   \
-   GXWGFifo.u16 = (u16)(us)
+   GXFIFO_WRITE(u16, (u16)(us))
 
 #define GX_WRITE_U32(ui)   \
-   GXWGFifo.u32 = (u32)(ui)
+   GXFIFO_WRITE(u32, (u32)(ui))
 
 #define GX_WRITE_F32(f)     \
-   GXWGFifo.f32 = (f32)(f);
+   GXFIFO_WRITE(f32, (f32)(f));
 
 
 // REG VERIF

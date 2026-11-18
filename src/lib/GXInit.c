@@ -1,3 +1,6 @@
+#ifdef RE4_XBOX
+#include <xbox/xgp.h>
+#endif
 #include <string.h>
 
 #include <dolphin/base/PPCArch.h>
@@ -73,25 +76,39 @@ static int __GXShutdown(int final);
 
 static OSResetFunctionInfo GXResetFuncInfo = {__GXShutdown, 0x7F, NULL, NULL};
 
+#ifdef RE4_XBOX
+// no write-gather buffer: every store reaches the command processor at once
+BOOL IsWriteGatherBufferEmpty(void) { return TRUE; }
+#else
 asm BOOL IsWriteGatherBufferEmpty(void) {
     sync
     mfspr r3, WPAR
     andi. r3, r3, 1
 }
 
+#endif
+
 static void EnableWriteGatherPipe(void) {
+#ifdef RE4_XBOX
+    return;
+#else
     u32 hid2 = PPCMfhid2();
 
     PPCMtwpar(OSUncachedToPhysical((void*)GXFIFO_ADDR));
     hid2 |= 0x40000000;
     PPCMthid2(hid2);
+#endif
 }
 
 static void DisableWriteGatherPipe(void) {
+#ifdef RE4_XBOX
+    return;
+#else
     u32 hid2 = PPCMfhid2();
 
     hid2 &= ~0x40000000;
     PPCMthid2(hid2);
+#endif
 }
 
 static GXTexRegion*__GXDefaultTexRegionCallback(const GXTexObj* t_obj, GXTexMapID id) {
@@ -248,6 +265,9 @@ GXFifoObj* GXInit(void* base, u32 size) {
     u32 freqBase;
 
     OSRegisterVersion(__GXVersion);
+#ifdef RE4_XBOX
+    XGx_Init();
+#endif
 
     __GXData->inDispList = FALSE;
     __GXData->dlSaveContext = TRUE;

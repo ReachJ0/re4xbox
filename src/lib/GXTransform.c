@@ -33,6 +33,13 @@ void GXProject(f32 x, f32 y, f32 z, const Mtx mtx, const f32* pm, const f32* vp,
 }
 
 static void WriteProjPS(const register f32 proj[6], register volatile void* dest) {
+#ifdef RE4_XBOX
+    int i;
+    (void) dest;
+    for (i = 0; i < 6; i++) {
+        GXFIFO_WRITE(f32, proj[i]);
+    }
+#else
     register f32 p01, p23, p45;
 
     asm {
@@ -43,9 +50,16 @@ static void WriteProjPS(const register f32 proj[6], register volatile void* dest
         psq_st p23,  0(dest), 0, 0
         psq_st p45,  0(dest), 0, 0
     }
+#endif
 }
 
 static void Copy6Floats(const register f32 src[6], register volatile f32* dest) {
+#ifdef RE4_XBOX
+    int i;
+    for (i = 0; i < 6; i++) {
+        dest[i] = src[i];
+    }
+#else
     register f32 ps01, ps23, ps45;
 
     asm {
@@ -56,6 +70,7 @@ static void Copy6Floats(const register f32 src[6], register volatile f32* dest) 
         psq_st ps23,  8(dest), 0, 0
         psq_st ps45, 16(dest), 0, 0
     }
+#endif
 }
 
 void __GXSetProjection(void) {
@@ -136,6 +151,15 @@ void GXGetProjectionv(f32* ptr) {
 }
 
 static void WriteMTXPS4x3(const register f32 mtx[3][4], register volatile f32* dest) {
+#ifdef RE4_XBOX
+    int r, c;
+    (void) dest;
+    for (r = 0; r < 3; r++) {
+        for (c = 0; c < 4; c++) {
+            GXFIFO_WRITE(f32, mtx[r][c]);
+        }
+    }
+#else
     register f32 a00_a01;
     register f32 a02_a03;
     register f32 a10_a11;
@@ -157,9 +181,19 @@ static void WriteMTXPS4x3(const register f32 mtx[3][4], register volatile f32* d
         psq_st a20_a21, 0(dest), 0, qr0
         psq_st a22_a23, 0(dest), 0, qr0
     }
+#endif
 }
 
 static void WriteMTXPS3x3from3x4(register f32 mtx[3][4], register volatile f32* dest) {
+#ifdef RE4_XBOX
+    int r, c;
+    (void) dest;
+    for (r = 0; r < 3; r++) {
+        for (c = 0; c < 3; c++) {
+            GXFIFO_WRITE(f32, mtx[r][c]);
+        }
+    }
+#else
     register f32 a00_a01;
     register f32 a02_a03;
     register f32 a10_a11;
@@ -181,9 +215,17 @@ static void WriteMTXPS3x3from3x4(register f32 mtx[3][4], register volatile f32* 
         psq_st a20_a21, 0(dest), 0, qr0
         stfs   a22_a23, 0(dest)
     }
+#endif
 }
 
 static void WriteMTXPS3x3(register f32 mtx[3][3], register volatile f32* dest) {
+#ifdef RE4_XBOX
+    int i;
+    (void) dest;
+    for (i = 0; i < 9; i++) {
+        GXFIFO_WRITE(f32, ((const f32*) mtx)[i]);
+    }
+#else
     register f32 a00_a01;
     register f32 a02_a10;
     register f32 a11_a12;
@@ -202,9 +244,19 @@ static void WriteMTXPS3x3(register f32 mtx[3][3], register volatile f32* dest) {
         psq_st a20_a21, 0(dest), 0, qr0
         stfs   a22_nnn, 0(dest)
     }
+#endif
 }
 
 static void WriteMTXPS4x2(const register f32 mtx[2][4], register volatile f32* dest) {
+#ifdef RE4_XBOX
+    int r, c;
+    (void) dest;
+    for (r = 0; r < 2; r++) {
+        for (c = 0; c < 4; c++) {
+            GXFIFO_WRITE(f32, mtx[r][c]);
+        }
+    }
+#else
     register f32 a00_a01;
     register f32 a02_a03;
     register f32 a10_a11;
@@ -220,6 +272,7 @@ static void WriteMTXPS4x2(const register f32 mtx[2][4], register volatile f32* d
         psq_st a10_a11, 0(dest), 0, qr0
         psq_st a12_a13, 0(dest), 0, qr0
     }
+#endif
 }
 
 #define GX_WRITE_MTX_ELEM(addr, value) \

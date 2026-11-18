@@ -58,5 +58,7 @@ typedef int BOOL;
 #endif
 
 #include "xbox/xmem.h"
+#include "xbox/xgxfifo.h"
+#include "xbox/xppc.h"
 
 #endif

@@ -80,3 +80,17 @@ Dialecto: `include/xbox/xcompat.h` (strstr const, `asm(...)` vacio) y `RE4_REGPI
 - `src/xbox/chp_xbox.cpp`: DSList y Strcpy/Strcmp/Strlen de CharPipeline (11 comprobaciones en host).
 - `DVDReadPrio` (lectura bloqueante) en `dvd_xbox.cpp` (3 comprobaciones nuevas).
 - Quedan 197 simbolos: GX (96 + `__GXSetIndirectMask` + `GXWGFifo`), audio (AX/AXFX/MIX/SYN/SEQ/AI), VI, Sofdec/ADX.
+
+### Capa GX (software GP)
+Enfoque: no se reescriben las funciones GX. El SDK real (`src/lib/GX*.c`) compila y corre tal cual sobre un procesador de
+comandos GP por software (`src/xbox/gp_xbox.cpp`): decodifica el flujo de bytes (registros CP/XF/BP, listas de display,
+vertices directos e indexados con todos los formatos VAT) y entrega primitivas a un backend (`include/xbox/xgp.h`).
+- Escrituras al FIFO: `GXFIFO_WRITE`/`GXFIFOP_WRITE` (`include/xbox/xgxfifo.h`); en GameCube expanden a la sentencia original.
+- Rafagas de 32 bytes del write-gather y registros PI/CP emulados; las listas de display se graban en memoria.
+- Direcciones: `GX_PHYS`/`GX_PHYS5` (offset en el bloque de memoria); `OSPhysicalTo*` redirigido en os.h.
+- Interrupciones PE (token/finish) en cola, entregadas tras `OSRestoreInterrupts`/en `GXWaitDrawDone` (`gx_xbox.cpp`).
+- Intrinsecos MWCC (`__rlwimi`, `__rlwinm`) en `include/xbox/xppc.h`; asm de GXTransform/GXLight en C.
+- Test: `tools/xbox/run_gx_test.sh` (109 comprobaciones sobre el SDK real, UBSan limpio). Limitacion: en host de 64 bits los
+  `GXTexObj` con punteros no caben (ASan da falso positivo); en Xbox son de 32 bits.
+- Estado: 0 simbolos GX sin resolver en el enlace de nxdk. FALTA el backend de dibujo (NV2A): transformacion/iluminacion,
+  texturas GC -> RGBA, TEV -> combinadores, copia de EFB, y la capa VI.

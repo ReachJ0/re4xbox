@@ -117,7 +117,7 @@ void RomFont::setup(void* image)
     GXSetTexCoordGen2(0, 1, 4, 0x1E, 0, 0x7D);
 }
 
-#define WGFIFO_S16(v) (GXWGFifo->s16 = (v))
+#define WGFIFO_S16(v) (GXFIFOP_WRITE(s16, (v)))
 
 // Draws one cell of the font sheet (cell at cx, cy) at screen x, y.
 void RomFont::draw(int x, int y, int xChar, int yChar)
@@ -1048,20 +1048,20 @@ void draw(MSG_QUE* q)
     u += l;
     x1 = x + w;
     y1 = y + h;
-    GXWGFifo->s16 = x;
-    GXWGFifo->s16 = y;
+    GXFIFOP_WRITE(s16, x);
+    GXFIFOP_WRITE(s16, y);
     GXColor4u8(cr, cg, cb, ca);
     GXTexCoord2f32((f32) u / texW, (f32) v / texH);
-    GXWGFifo->s16 = x1;
-    GXWGFifo->s16 = y;
+    GXFIFOP_WRITE(s16, x1);
+    GXFIFOP_WRITE(s16, y);
     GXColor4u8(cr, cg, cb, ca);
     GXTexCoord2f32((f32) (u + cw) / texW, (f32) v / texH);
-    GXWGFifo->s16 = x1;
-    GXWGFifo->s16 = y1;
+    GXFIFOP_WRITE(s16, x1);
+    GXFIFOP_WRITE(s16, y1);
     GXColor4u8(cr, cg, cb, ca);
     GXTexCoord2f32((f32) (u + cw) / texW, (f32) (v + cellH) / texH);
-    GXWGFifo->s16 = x;
-    GXWGFifo->s16 = y1;
+    GXFIFOP_WRITE(s16, x);
+    GXFIFOP_WRITE(s16, y1);
     GXColor4u8(cr, cg, cb, ca);
     GXTexCoord2f32((f32) u / texW, (f32) (v + cellH) / texH);
     LightMgr.setFog();

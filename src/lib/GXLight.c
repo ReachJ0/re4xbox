@@ -323,6 +323,20 @@ static inline void PushLight(const register GXLightObj* lt_obj, register void* d
     register u32 zero, color;
     register f32 a0_a1, a2_k0, k1_k2;
     register f32 px_py, pz_dx, dy_dz;
+#ifdef RE4_XBOX
+    {
+        const char* o = (const char*) lt_obj;
+        int i;
+        (void) dest; (void) zero; (void) color; (void) a0_a1; (void) a2_k0; (void) k1_k2; (void) px_py; (void) pz_dx; (void) dy_dz;
+        GXFIFO_WRITE(u32, 0);
+        GXFIFO_WRITE(u32, 0);
+        GXFIFO_WRITE(u32, 0);
+        GXFIFO_WRITE(u32, *(const u32*) (o + 12));
+        for (i = 0; i < 12; i++) {
+            GXFIFO_WRITE(f32, ((const f32*) (o + 16))[i]);
+        }
+    }
+#endif
 #ifdef __MWERKS__  // clang-format off
 	asm {
 		lwz     color, 12(lt_obj)

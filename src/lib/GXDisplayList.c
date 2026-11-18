@@ -94,6 +94,10 @@ void GXCallDisplayList(void* list, u32 nbytes) {
     }
 
     GX_WRITE_U8(GX_CMD_CALL_DL);
+#ifdef RE4_XBOX
+    GX_WRITE_U32(GX_PHYS(list));  // the processor takes an offset into the game's memory block
+#else
     GX_WRITE_U32(list);
+#endif
     GX_WRITE_U32(nbytes);
 }

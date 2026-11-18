@@ -60,8 +60,8 @@ void init_dbmodule()
 // Writes one 2D vertex position into the GX FIFO.
 static inline void Pos2s16(s16 x, s16 y)
 {
-    GXWGFifo->s16 = x;
-    GXWGFifo->s16 = y;
+    GXFIFOP_WRITE(s16, x);
+    GXFIFOP_WRITE(s16, y);
 }
 
 // OT callback of Draw_tile: draws the filled screen rectangle (ortho 512 x 448, no blending).

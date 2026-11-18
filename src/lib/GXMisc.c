@@ -1,3 +1,6 @@
+#ifdef RE4_XBOX
+#include <xbox/xgp.h>
+#endif
 #include <stddef.h>
 #include <dolphin/base/PPCArch.h>
 #include <dolphin/gx.h>
@@ -121,6 +124,9 @@ void GXSetDrawSync(u16 token) {
     GX_WRITE_RAS_REG(reg);
     GXFlush();
     OSRestoreInterrupts(enabled);
+#ifdef RE4_XBOX
+    XGx_DeliverInterrupts();
+#endif
     __GXData->bpSentNot = 0;
 }
 
@@ -140,6 +146,9 @@ void GXSetDrawDone(void) {
     GXFlush();
     DrawDone = 0;
     OSRestoreInterrupts(enabled);
+#ifdef RE4_XBOX
+    XGx_DeliverInterrupts();
+#endif
 }
 
 void GXWaitDrawDone(void) {
@@ -149,6 +158,11 @@ void GXWaitDrawDone(void) {
 
     enabled = OSDisableInterrupts();
     while (!DrawDone) {
+#ifdef RE4_XBOX
+        if (XGx_DeliverInterrupts()) {
+            continue;
+        }
+#endif
         OSSleepThread(&FinishQueue);
     }
     OSRestoreInterrupts(enabled);

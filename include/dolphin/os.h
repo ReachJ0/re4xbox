@@ -222,6 +222,25 @@ void* OSUncachedToCached(void* ucaddr);
 #define OSUncachedToCached(ucaddr)   ((void*) ((u8*)(ucaddr) - (OS_BASE_UNCACHED - OS_BASE_CACHED)))
 #endif
 
+#ifdef RE4_XBOX
+// Physical addresses are offsets into the game's memory block (xmem.h); the hardware registers
+// (0x0C000000..0x0C008FFF: CP, PE, PI, MEM, and the write-gather FIFO) live in the GX command processor's shadow window.
+#undef OSPhysicalToCached
+#undef OSPhysicalToUncached
+#undef OSCachedToPhysical
+#undef OSUncachedToPhysical
+#undef OSCachedToUncached
+#undef OSUncachedToCached
+void* XGx_HwPtr(unsigned paddr);
+#define OSPhysicalToCached(paddr) ((void*) XMEM_FROM_OFF(paddr))
+#define OSPhysicalToUncached(paddr) \
+    ((u32) (paddr) >= 0x0C000000u ? XGx_HwPtr((u32) (paddr)) : (void*) XMEM_FROM_OFF(paddr))
+#define OSCachedToPhysical(caddr) ((u32) XMEM_OFF(caddr))
+#define OSUncachedToPhysical(ucaddr) ((u32) XMEM_OFF(ucaddr))
+#define OSCachedToUncached(caddr) ((void*) (caddr))
+#define OSUncachedToCached(ucaddr) ((void*) (ucaddr))
+#endif
+
 // unsorted externs
 extern OSTime __OSGetSystemTime(void);
 __declspec(weak) extern int __OSIsGcam;
