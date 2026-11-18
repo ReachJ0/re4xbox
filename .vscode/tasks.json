@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Xbox: build (smoke test)",
+      "type": "shell",
+      "command": "export NXDK_DIR=${NXDK_DIR:-$HOME/nxdk} PATH=${NXDK_DIR:-$HOME/nxdk}/bin:$PATH && make -C xbox -j8",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Xbox: build (run the game)",
+      "type": "shell",
+      "command": "export NXDK_DIR=${NXDK_DIR:-$HOME/nxdk} PATH=${NXDK_DIR:-$HOME/nxdk}/bin:$PATH && rm -f xbox/main.obj && make -C xbox -j8 RUN_GAME=1",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Xbox: host tests",
+      "type": "shell",
+      "command": "sh tools/xbox/run_all_tests.sh",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

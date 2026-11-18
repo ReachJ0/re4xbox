@@ -1,0 +1,21 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "RE4 Xbox (nxdk)",
+      "includePath": [
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/src/lib",
+        "${env:HOME}/nxdk/lib",
+        "${env:HOME}/nxdk/lib/xboxrt/libc_extensions",
+        "${env:HOME}/nxdk/lib/hal",
+        "${env:HOME}/nxdk/lib/pbkit",
+        "${env:HOME}/nxdk/lib/winapi",
+        "${env:HOME}/nxdk/lib/xlibc"
+      ],
+      "defines": ["RE4_XBOX", "NXDK"],
+      "cppStandard": "gnu++11",
+      "intelliSenseMode": "clang-x86"
+    }
+  ]
+}

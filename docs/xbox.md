@@ -105,3 +105,9 @@ vertices directos e indexados con todos los formatos VAT) y entrega primitivas a
 
 - `xvi_backend_sys.cpp` inicia pbkit en el primer retrace y en cada uno limpia el back buffer y hace el swap: negro mientras el juego tiene la pantalla en blanco, azul oscuro de relleno cuando la activa. No dibuja nada del juego: faltan GXCopyDisp (EFB a XFB) y el dibujo NV2A.
 - `main.cpp` solo arranca el juego con `make -C xbox RUN_GAME=1`; por defecto sigue siendo la prueba de humo. Ninguna de las dos se ha probado en consola ni en emulador.
+
+## Montar nxdk y compilar (Linux, macOS o WSL2)
+
+- `tools/xbox/setup_nxdk.sh [dir]` clona nxdk (commit fijado fafbe41), construye sus herramientas y compila `xbox/bin/default.xbe`.
+- `.vscode/tasks.json`: tareas de compilación (prueba de humo o `RUN_GAME=1`) y de tests de host. Ctrl+Shift+B compila. En Windows, abrir la carpeta con la extensión WSL.
+- `.vscode/c_cpp_properties.json` asume nxdk en `~/nxdk`. Sin probar en una máquina limpia.
