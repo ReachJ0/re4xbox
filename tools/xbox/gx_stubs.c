@@ -20,3 +20,4 @@ void OSPanic(const char* file, int line, const char* msg, ...) { fprintf(stderr,
 void PPCSync(void) {}
 u32 xos_cntlzw(u32 v) { return v ? __builtin_clz(v) : 32; }
 u32 VIGetTvFormat(void) { return VI_NTSC; }
+void OSRegisterVersion(const char* v) {}
