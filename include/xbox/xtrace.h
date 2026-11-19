@@ -12,6 +12,10 @@ extern "C" {
 // Appends text to the ring. Partial lines are fine: a line ends at '\n'. Safe from several threads.
 void XTrace_Add(const char* text);
 
+// A breadcrumb: kept in a separate small ring that is never drawn on the frame. Only the hang watchdog shows it
+// (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
+void XTrace_Crumb(const char* text);
+
 // Shows the ring forever (the frame keeps being presented) and never returns. OSPanic uses it instead of
 // rebooting the console, so the message stays readable.
 void XTrace_HaltForever(void);
