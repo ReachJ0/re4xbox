@@ -207,6 +207,13 @@ void XViBackend_Present(const void* fb, int black, int, int)
     InterlockedExchange(&s_pbBusy, 0);
 }
 
+void XTrace_ShowTextScreen(void)
+{
+    if (s_state > 0) {
+        pb_show_debug_screen();
+    }
+}
+
 void XTrace_HaltForever(void)
 {
     EnsurePb();

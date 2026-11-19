@@ -22,6 +22,7 @@ int main(void)
 #endif
     { char b[80]; snprintf(b, sizeof(b), "OSInit ok, arena %p .. %p\n", OSGetArenaLo(), OSGetArenaHi()); XTrace_Add(b); }
 #ifdef RE4_RUN_GAME
+    XCrash_Install();
     XTrace_Add("calling re4_main\n");
     re4_main();
     XTrace_Add("re4_main returned\n");   // make RE4_RUN_GAME=1 (see docs/xbox.md): runs the game; not verified to boot

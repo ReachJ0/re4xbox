@@ -16,6 +16,12 @@ void XTrace_Add(const char* text);
 // (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
 void XTrace_Crumb(const char* text);
 
+// Switches the display to the CPU-drawn text screen of nxdk (pbkit may be showing its own frame).
+void XTrace_ShowTextScreen(void);
+
+// Installs the crash report (src/xbox/xcrash_sys.cpp): an unhandled exception prints its code and address.
+void XCrash_Install(void);
+
 // Shows the ring forever (the frame keeps being presented) and never returns. OSPanic uses it instead of
 // rebooting the console, so the message stays readable.
 void XTrace_HaltForever(void);
