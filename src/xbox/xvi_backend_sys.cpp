@@ -40,7 +40,7 @@ void XViBackend_SleepUntilUs(unsigned long long t)
 
 // ---- development trace (xbox/xtrace.h) ---------------------------------------------------------------------
 
-#define TRACE_LINES 15
+#define TRACE_LINES 11
 #define TRACE_COLS 50
 static char s_lines[TRACE_LINES][TRACE_COLS + 1];
 static int s_head;                       // index of the line being written
@@ -54,8 +54,11 @@ static void Lock(void)
 }
 static void Unlock(void) { InterlockedExchange(&s_lock, 0); }
 
+static volatile LONG s_traceSeq;   // bumped by every XTrace_Add: the watchdog redraws when it changes
+
 void XTrace_Add(const char* text)
 {
+    InterlockedIncrement(&s_traceSeq);
     Lock();
     for (; *text; text++) {
         if (*text == '\n' || s_col >= TRACE_COLS) {
@@ -88,48 +91,25 @@ void XTrace_Crumb(const char* text)
 }
 
 static unsigned s_presents;
+static volatile LONG s_pbBusy;               // pbkit is not thread safe: one thread draws at a time
+static const void* s_lastFb;
+static int s_lastBlack = 1;
+static LONG s_drawnSeq = -1;
+static void DrawFrame(const void* fb, int black, const char* status);
+static int s_state;                          // 0 = pbkit not started, 1 = running, -1 = pbkit failed
 
-// Wakes once a second. If neither a frame was presented nor a breadcrumb written for 3 s the game is stuck:
-// switch to nxdk's debug screen (no GPU involved) and write the breadcrumbs and the trace there. When life
-// returns, go back to the frame.
+// Redraws the screen when the trace changed. The screen only changes when a frame is presented, and the game
+// may stop presenting (waiting for the disc, say) with new trace lines nobody could see.
 static DWORD WINAPI Watchdog(LPVOID)
 {
-    unsigned lastP = ~0u;
-    LONG lastC = -1;
-    int still = 0, shown = 0;
     for (;;) {
-        Sleep(1000);
-        unsigned p = s_presents;
-        LONG c = s_crumbN;
-        if (p == lastP && c == lastC) {
-            still++;
-        } else {
-            if (shown) {
-                pb_show_front_screen();
-                shown = 0;
-            }
-            still = 0;
-        }
-        lastP = p;
-        lastC = c;
-        if (still >= 3 && !shown) {
-            shown = 1;
-            pb_show_debug_screen();
-            debugClearScreen();
-            debugPrint("STUCK: presents=%u crumbs=%ld\n", p, (long) c);
-            for (int i = 1; i <= CRUMBS; i++) {   // oldest first
-                const char* t = s_crumb[(c + i) % CRUMBS];
-                if (t[0]) {
-                    debugPrint("%s\n", t);
-                }
-            }
-            debugPrint("--\n");
-            for (int i = TRACE_LINES - 8; i <= TRACE_LINES; i++) {
-                const char* t = s_lines[(s_head + i) % TRACE_LINES];
-                if (t[0]) {
-                    debugPrint("%s\n", t);
-                }
-            }
+        Sleep(250);
+        if (s_state > 0 && s_traceSeq != s_drawnSeq && InterlockedExchange(&s_pbBusy, 1) == 0) {
+            char st[64];
+            s_drawnSeq = s_traceSeq;
+            snprintf(st, sizeof(st), "present %u (trace refresh)", s_presents);
+            DrawFrame(s_lastFb, s_lastBlack, st);
+            InterlockedExchange(&s_pbBusy, 0);
         }
     }
     return 0;
@@ -137,7 +117,6 @@ static DWORD WINAPI Watchdog(LPVOID)
 
 static unsigned s_busyTimeouts, s_finishTimeouts;   // waits on pbkit that gave up (see DrawFrame)
 
-static int s_state;   // 0 = pbkit not started, 1 = running, -1 = pbkit failed: present nothing
 static void EnsurePb(void)
 {
     if (s_state == 0) {
@@ -169,6 +148,12 @@ static void DrawFrame(const void* fb, int black, const char* status)
         }
     }
     Unlock();
+    for (int i = 3; i >= 0; i--) {   // the four newest breadcrumbs
+        const char* c = s_crumb[(s_crumbN - i + CRUMBS) % CRUMBS];
+        if (c[0]) {
+            pb_print("~ %s\n", c);
+        }
+    }
     pb_print("%s\n", status);   // last row: it keeps changing while the game is alive
     XTrace_Crumb("DF draw text");
     pb_draw_text_screen();
@@ -200,10 +185,17 @@ void XViBackend_Present(const void* fb, int black, int, int)
     if (s_state < 0) {
         return;
     }
+    while (InterlockedExchange(&s_pbBusy, 1)) {
+        Sleep(1);
+    }
     s_presents++;
+    s_lastFb = fb;
+    s_lastBlack = black;
+    s_drawnSeq = s_traceSeq;
     snprintf(status, sizeof(status), "present %u black=%d busyTO=%u finTO=%u", s_presents, black, s_busyTimeouts,
              s_finishTimeouts);
     DrawFrame(fb, black, status);
+    InterlockedExchange(&s_pbBusy, 0);
 }
 
 void XTrace_HaltForever(void)

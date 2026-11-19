@@ -27,6 +27,9 @@
 // Only compiled for the Xbox build (RE4_XBOX); it has no meaning on the GameCube target.
 #ifdef RE4_XBOX
 
+#ifdef NXDK
+#include "xbox/xtrace.h"
+#endif
 #include <dolphin/dvd.h>
 
 #include <stdint.h>
@@ -390,6 +393,11 @@ s32 DVDConvertPathToEntrynum(const char* pathPtr)
         }
     }
     if (!s_backendOk || !XDvdBackend_Stat(path, &size, &isDir)) {
+#ifdef NXDK
+        XTrace_Add("DVD miss: ");   // development: which disc file the game asked for and the disc does not have
+        XTrace_Add(path);
+        XTrace_Add("\n");
+#endif
         return -1;
     }
     if (s_nent >= MAX_ENTRIES) {
