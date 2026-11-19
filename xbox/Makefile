@@ -35,5 +35,6 @@ $(CURDIR)/gen/%.c: $(RE4)/src/lib/%.c $(RE4)/tools/xbox/strip_ps.py
 include $(NXDK_DIR)/Makefile
 LDFLAGS += -errorlimit:0
 LDFLAGS += -demangle:no
+LDFLAGS += -map:$(CURDIR)/main.map
 
 LDFLAGS += @$(CURDIR)/alt.inc

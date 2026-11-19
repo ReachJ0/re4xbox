@@ -31,3 +31,4 @@ xbox/main.exe*
 *.obj
 *.c.d
 *.cpp.d
+xbox/main.map

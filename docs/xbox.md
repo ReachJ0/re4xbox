@@ -112,3 +112,8 @@ vertices directos e indexados con todos los formatos VAT) y entrega primitivas a
 - `tools/xbox/setup_nxdk.sh [dir]` clona nxdk (commit fijado fafbe41), construye sus herramientas y compila `xbox/bin/default.xbe`.
 - `.vscode/tasks.json`: tareas de compilación (prueba de humo o `RUN_GAME=1`) y de tests de host. Ctrl+Shift+B compila. En Windows, abrir la carpeta con la extensión WSL.
 - `.vscode/c_cpp_properties.json` asume nxdk en `~/nxdk`. Sin probar en una máquina limpia.
+
+## Dónde está parado el juego (monitor de xemu + mapa de símbolos)
+
+Si el juego se cuelga sin mensaje: en xemu, menú Debug → Monitor; escribir `stop`, `info registers` (anotar EIP) y `x /64xw $esp` (la pila). Después, con el mapa que genera el enlace (`xbox/main.map`, hecho con el mismo build que se ejecutó):
+`python tools/xbox/addr2sym.py xbox/main.map 0xEIP` — o `--stack < volcado.txt` para recorrer la pila. Las direcciones de pila que caen en el código son llamadas pendientes: dan la cadena de funciones hasta el cuelgue (con falsos positivos: son valores sueltos de la pila).
