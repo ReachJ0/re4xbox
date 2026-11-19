@@ -22,7 +22,7 @@ SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))
 
 # what the sources of the game expect. They apply to OUR objects only: a global CFLAGS would also reach nxdk's own
 # libraries (its crt0 would then call re4_main instead of main) when they are built in the same make run.
-RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing $(if $(RUN_GAME),-DRE4_RUN_GAME)
+RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing $(if $(RUN_GAME),-DRE4_RUN_GAME) $(if $(DEBUGSCREEN),-DRE4_DEBUGSCREEN)
 RE4_INC  = -I$(RE4)/include -I$(RE4)/src/lib
 RE4_OBJS = $(addsuffix .obj,$(basename $(SRCS)))
 $(RE4_OBJS): CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w

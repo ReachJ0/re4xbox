@@ -117,3 +117,5 @@ vertices directos e indexados con todos los formatos VAT) y entrega primitivas a
 
 Si el juego se cuelga sin mensaje: en xemu, menú Debug → Monitor; escribir `stop`, `info registers` (anotar EIP) y `x /64xw $esp` (la pila). Después, con el mapa que genera el enlace (`xbox/main.map`, hecho con el mismo build que se ejecutó):
 `python tools/xbox/addr2sym.py xbox/main.map 0xEIP` — o `--stack < volcado.txt` para recorrer la pila. Las direcciones de pila que caen en el código son llamadas pendientes: dan la cadena de funciones hasta el cuelgue (con falsos positivos: son valores sueltos de la pila).
+
+- `make -C xbox RUN_GAME=1 DEBUGSCREEN=1`: sin pbkit; la traza se escribe con `debugPrint` (pantalla de texto de nxdk, la CPU dibuja, sin GPU). Sirve cuando el cambio de buffer de pbkit se bloquea y congela la pantalla (se vio en xemu hacia el frame 31). Al cambiar de modo borrar `xbox/main.obj` y `src/xbox/xvi_backend_sys.obj` (make no vigila las banderas).

@@ -59,6 +59,11 @@ static volatile LONG s_traceSeq;   // bumped by every XTrace_Add: the watchdog r
 void XTrace_Add(const char* text)
 {
     InterlockedIncrement(&s_traceSeq);
+#ifdef RE4_DEBUGSCREEN
+    Lock();
+    debugPrint("%s", text);   // CPU-drawn text screen of nxdk: no GPU, no pbkit (make DEBUGSCREEN=1)
+    Unlock();
+#endif
     Lock();
     for (; *text; text++) {
         if (*text == '\n' || s_col >= TRACE_COLS) {
@@ -120,6 +125,10 @@ static unsigned s_busyTimeouts, s_finishTimeouts;   // waits on pbkit that gave 
 static void EnsurePb(void)
 {
     if (s_state == 0) {
+#ifdef RE4_DEBUGSCREEN
+        s_state = -1;   // pbkit never starts: the text screen of nxdk stays on the display
+        return;
+#endif
         s_state = pb_init() == 0 ? 1 : -1;
         if (s_state > 0) {
             pb_show_front_screen();
