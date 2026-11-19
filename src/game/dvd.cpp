@@ -1470,8 +1470,13 @@ cDvdQueue* cDvd::pullReadQueue()
 int cDvd::ReadCheck(int id, int* mram_size, int* aram_size, void** addr)
 {
     DVD_READINFO info;
+#ifdef RE4_XBOX
+    int ret = readCheckMain(id, &info);
 
+    if (ret == 1) {
+#else
     if (readCheckMain(id, &info) == 1) {
+#endif
         if (mram_size) {
             *mram_size = info.mram_readsize;
         }
@@ -1482,6 +1487,9 @@ int cDvd::ReadCheck(int id, int* mram_size, int* aram_size, void** addr)
             *addr = (void*) info.start_addr[0][0];
         }
     }
+#ifdef RE4_XBOX
+    return ret;
+#endif
 }
 
 // Poll variant used by read.cpp that also fills a DVD_READINFO.

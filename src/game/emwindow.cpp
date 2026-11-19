@@ -814,7 +814,7 @@ int cEmWindow::SetBreakEsp(int dir_type, int break_size, int breakType)
     r.x += ang.x;
     r.y += ang.y;
     r.z += ang.z;
-    EstSet(0, -1, &p, &r, eff, (u8) id, 0x801, ESP_CORE_KIND_NONE, 0, 0);
+    EstSet(0, -1, &p, &r, eff, (u8) id, 0x801, ESP_CORE_KIND_NONE, 0, 0); XRETV(0)
 }
 
 // Enables / disables weapon damage (etc bit 0 = disabled).

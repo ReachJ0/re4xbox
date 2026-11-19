@@ -2484,7 +2484,7 @@ int cItemMgr::partsCombine(cItem* pWeapon, cItem* pParts)
 // Marks item `id` usable here (the sub screen offers "Use"); the room/scenario sets these.
 int cItemMgr::available(ITEM_ID id)
 {
-    FlagOn(m_pAvailable, id);
+    XRET FlagOn(m_pAvailable, id);
 }
 
 // Clears the usable-item mask.

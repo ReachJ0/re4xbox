@@ -805,7 +805,7 @@ int MercSysSetAddTime(int time)
         return 1;
     }
     wk->addTime += time;
-    wk->flags |= MF_ADD_TIME;
+    wk->flags |= MF_ADD_TIME; XRETV(1)
     // no return: the original falls off the end (r3 still holds `sec`)
 }
 
