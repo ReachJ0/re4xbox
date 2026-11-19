@@ -21,7 +21,8 @@ static void __attribute__((stdcall, noreturn)) Hook(unsigned code, unsigned p1, 
     int shown = 0;
 
     XTrace_ShowTextScreen();
-    debugPrint("\n*** FATAL: bugcheck %08x ***\n", code);
+    debugClearScreen();   // the whole report has to fit on one screen: it would scroll the code off the top
+    debugPrint("*** FATAL: bugcheck %08x ***\n", code);
     debugPrint("p1=%08x p2=%08x p3=%08x p4=%08x\n", p1, p2, p3, p4);
     if (code == 0x1E) {
         debugPrint("exception %08x at %08x, %s %08x\n", p1, p2, p3 ? "write" : "read", p4);
