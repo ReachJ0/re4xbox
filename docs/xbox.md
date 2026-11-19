@@ -123,3 +123,10 @@ Si el juego se cuelga sin mensaje: en xemu, menú Debug → Monitor; escribir `s
 - Caídas: el juego corre en ring 0 y una excepción sin manejar acaba en `KeBugCheckEx`, que congela la máquina (`cli; hlt`; en el monitor de xemu se ve `EFL=00000046` sin el bit IF y `HLT=1`; no es una espera, es una caída). `XCrash_Install()` (src/xbox/xcrash_sys.cpp, solo con `RUN_GAME=1`) parchea el inicio de `KeBugCheckEx` para escribir el código, la dirección que falló y las direcciones de código de la pila; se traducen con `tools/xbox/addr2sym.py xbox/main.map`. Sin verificar en xemu.
 
 - Funciones sin `return` (peculiaridad de la decompilación: el PowerPC dejaba el resultado en r3): con clang caer al final de una función que devuelve valor es una instrucción ilegal (`ud2`). Se vio como `bugcheck 0x1E`, excepción `c000001d`, en `cDvd::ReadCheck`. Corregidas las 4 que hay (`ReadCheck`, `cItemMgr::available`, `cEmWindow::SetBreakEsp`, `MercSysSetAddTime`) con `XRET`/`XRETV` de `include/types.h` (vacías en GC; el preprocesado de GC es idéntico). `tools/xbox/check_returns.sh` vuelve a buscarlas.
+
+## Dos discos
+
+El juego de GameCube son dos discos (id de disco 0 / 1) y pide el cambio él mismo (`cDvd::DiscChange`). En Xbox no hay cambio físico:
+`DVDChangeDiskAsync` llama a `XDvdBackend_SetDisc(n)` y el backend sirve `D:\disc1\` o `D:\disc2\` si esas carpetas existen
+(si no, usa `D:\` para los dos, como antes). Al arrancar se usa el disco 1. Para el ISO: copiar el contenido de cada disco en
+`xbox/bin/disc1/` y `xbox/bin/disc2/`. Sin verificar en xemu; probado en host (`run_dvd_test.sh`).

@@ -49,6 +49,23 @@ int main(int argc, char** argv)
         char n[32]; snprintf(n, sizeof n, "m%d.bin", i);
         CHECK(XDvdBackend_Read(n, 10, buf, 20, &got) == 1 && got == 20 && buf[0] == (unsigned char) (10 * 3 + i));
     }
+    // two discs: disc1/ and disc2/ folders switch with SetDisc; without them the root serves both
+    XDvdBackend_SetDisc(1);
+    CHECK(XDvdBackend_Stat("b.bin", &sz, &dir) == 1 && sz == 64);   // no disc folders yet: root
+    snprintf(p, sizeof p, "%s/disc1", root); mkdir(p, 0755);
+    snprintf(p, sizeof p, "%s/disc2", root); mkdir(p, 0755);
+    Make(root, "disc1/d.bin", 10, 1);
+    Make(root, "disc2/d.bin", 20, 2);
+    XDvdBackend_SetDisc(0);
+    CHECK(XDvdBackend_Stat("d.bin", &sz, &dir) == 1 && sz == 10);
+    CHECK(XDvdBackend_Stat("b.bin", &sz, &dir) == 0);
+    XDvdBackend_SetDisc(1);
+    CHECK(XDvdBackend_Stat("d.bin", &sz, &dir) == 1 && sz == 20);
+    CHECK(XDvdBackend_Read("d.bin", 0, buf, 20, &got) == 1 && got == 20 && buf[1] == (unsigned char) (3 + 2));
+    XDvdBackend_SetDisc(0);
+    CHECK(XDvdBackend_Read("d.bin", 0, buf, 20, &got) == 1 && got == 10);   // cache was flushed by the swap
+    XDvdBackend_SetRoot(root);   // back to the plain root for the layer test
+    { char c[600]; snprintf(c, sizeof c, "rm -rf %s/disc1 %s/disc2", root, root); if (system(c)) {} }
     // the whole layer on top
     XDvd_Reset(); XDvdBackend_Init(); XDvdBackend_SetRoot(root);
     DVDFileInfo fi; memset(&fi, 0, sizeof fi);

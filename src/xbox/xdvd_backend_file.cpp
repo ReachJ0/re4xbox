@@ -34,6 +34,7 @@
 namespace {
 
 char s_root[FULL_MAX] = XDVD_ROOT;
+char s_base[FULL_MAX] = XDVD_ROOT;   // the folder given by XDVD_ROOT / SetRoot; disc folders live inside it
 
 struct Open {
     FILE* f;
@@ -111,7 +112,11 @@ FILE* Acquire(const char* path)
 
 extern "C" {
 
-int XDvdBackend_Init(void) { return 1; }
+int XDvdBackend_Init(void)
+{
+    XDvdBackend_SetDisc(0);
+    return 1;
+}
 
 void XDvdBackend_SetRoot(const char* dir)
 {
@@ -126,6 +131,42 @@ void XDvdBackend_SetRoot(const char* dir)
         s_root[n++] = XDVD_SEP;
     }
     s_root[n] = 0;
+    memcpy(s_base, s_root, n + 1);
+}
+
+// The GameCube game has two discs (0 / 1 in the disc id) and asks for the swap itself (cDvd::DiscChange).
+// Here the swap is a change of folder: "<base>disc1/" and "<base>disc2/" when they exist; otherwise the base
+// folder is used for both (a single-disc layout keeps working, files of the other disc are then "not on disc").
+void XDvdBackend_SetDisc(int disc)
+{
+    char cand[FULL_MAX];
+    size_t bl = strlen(s_base);
+    int isDir = 0;
+
+    CloseAll();
+    memcpy(s_root, s_base, bl + 1);
+    if (disc < 0 || disc > 1 || bl + 7 > FULL_MAX) {
+        return;
+    }
+    memcpy(cand, s_base, bl);
+    memcpy(cand + bl, "disc", 4);
+    cand[bl + 4] = (char) ('1' + disc);
+    cand[bl + 5] = XDVD_SEP;
+    cand[bl + 6] = 0;
+#ifdef NXDK
+    {
+        DWORD attr = GetFileAttributesA(cand);
+        isDir = attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+    }
+#else
+    {
+        struct stat st;
+        isDir = stat(cand, &st) == 0 && S_ISDIR(st.st_mode);
+    }
+#endif
+    if (isDir) {
+        memcpy(s_root, cand, bl + 7);
+    }
 }
 
 int XDvdBackend_Stat(const char* path, unsigned int* size, int* is_dir)

@@ -37,6 +37,10 @@ int XDvdBackend_Read(const char* path, unsigned int off, void* buf, unsigned int
 // tests. Closes any open files.
 void XDvdBackend_SetRoot(const char* dir);
 
+// The game swaps discs (0 / 1) by itself. A backend that can, serves the files of that disc: the stdio one
+// uses "<root>/disc1/" or "<root>/disc2/" if that folder exists and the root itself otherwise.
+void XDvdBackend_SetDisc(int disc);
+
 #ifdef __cplusplus
 }
 #endif

@@ -66,6 +66,7 @@ int XDvdBackend_Read(const char* path, unsigned int off, void* buf, unsigned int
     return 0;
 }
 void XDvdBackend_SetRoot(const char*) {}
+void XDvdBackend_SetDisc(int) {}
 }
 
 // 32 byte aligned buffers that live below 4 GB are not needed: u32 is 64-bit in the SDK headers on this host

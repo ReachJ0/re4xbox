@@ -305,6 +305,9 @@ int StepDvd()
         } else if (b->command == DVD_COMMAND_CHANGE_DISK) {
             if (b->id) {
                 s_diskId = *b->id;
+                if (s_diskId.diskNumber <= 1) {
+                    XDvdBackend_SetDisc(s_diskId.diskNumber);   // no physical swap on the Xbox: other folder
+                }
             }
         }
         b->state = state;
