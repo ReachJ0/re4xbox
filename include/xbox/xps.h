@@ -26,6 +26,44 @@ typedef struct XPs {
     float p0, p1;
 } XPs;
 
+// Fused multiply-add a*b+c with one rounding (what Gekko's ps_madd does). nxdk's pdclib fmaf is a stub that
+// aborts, so this is our own: a*b is exact in a double (24+24 bits), the sum is rounded to odd, and the final
+// rounding to float is then correct (the double rounding cannot go wrong with round-to-odd). It needs the
+// x87 precision at 53 bits, so on i386 the control word is set for the call (the CRT may leave 64 bits).
+static inline float XFmaf(float a, float b, float c)
+{
+    double p = (double) a * (double) b;
+    double dc = (double) c;
+    double s, bb, err;
+    uint64_t bits;
+    float r;
+#if defined(__i386__) || defined(XPS_X87_CW)
+    unsigned short cw, cw53;
+    __asm__ volatile("fnstcw %0" : "=m"(cw));
+    cw53 = (unsigned short) ((cw & ~0x300u) | 0x200u);
+    __asm__ volatile("fldcw %0" : : "m"(cw53));
+#endif
+    s = p + dc;
+    bb = s - p;
+    err = (p - (s - bb)) + (dc - bb);   // exact error of the sum (TwoSum)
+    if (err != 0.0 && s - s == 0.0) {   // inexact and finite: make the last bit odd, toward the true value
+        __builtin_memcpy(&bits, &s, 8);
+        if (!(bits & 1)) {
+            if ((err > 0.0) == (s > 0.0)) {
+                bits++;
+            } else {
+                bits--;
+            }
+            __builtin_memcpy(&s, &bits, 8);
+        }
+    }
+    r = (float) s;
+#if defined(__i386__) || defined(XPS_X87_CW)
+    __asm__ volatile("fldcw %0" : : "m"(cw));
+#endif
+    return r;
+}
+
 // GQR0..7, set by the game (mtspr 912..919). GQR0 is 0 (floats). The OS keeps them per thread on the GC;
 // here they are global, which is enough while every task sets the same values (GQR2..5, see XPs_InitGQR) and
 // GQR6 is set right before use (setupGQR6).
@@ -51,12 +89,12 @@ static inline XPs ps_sub(XPs a, XPs b) { return xps(a.p0 - b.p0, a.p1 - b.p1); }
 static inline XPs ps_mul(XPs a, XPs c) { return xps(a.p0 * c.p0, a.p1 * c.p1); }
 static inline XPs ps_muls0(XPs a, XPs c) { return xps(a.p0 * c.p0, a.p1 * c.p0); }
 static inline XPs ps_muls1(XPs a, XPs c) { return xps(a.p0 * c.p1, a.p1 * c.p1); }
-static inline XPs ps_madd(XPs a, XPs c, XPs b) { return xps(fmaf(a.p0, c.p0, b.p0), fmaf(a.p1, c.p1, b.p1)); }
-static inline XPs ps_msub(XPs a, XPs c, XPs b) { return xps(fmaf(a.p0, c.p0, -b.p0), fmaf(a.p1, c.p1, -b.p1)); }
+static inline XPs ps_madd(XPs a, XPs c, XPs b) { return xps(XFmaf(a.p0, c.p0, b.p0), XFmaf(a.p1, c.p1, b.p1)); }
+static inline XPs ps_msub(XPs a, XPs c, XPs b) { return xps(XFmaf(a.p0, c.p0, -b.p0), XFmaf(a.p1, c.p1, -b.p1)); }
 static inline XPs ps_nmadd(XPs a, XPs c, XPs b) { return ps_neg(ps_madd(a, c, b)); }
 static inline XPs ps_nmsub(XPs a, XPs c, XPs b) { return ps_neg(ps_msub(a, c, b)); }
-static inline XPs ps_madds0(XPs a, XPs c, XPs b) { return xps(fmaf(a.p0, c.p0, b.p0), fmaf(a.p1, c.p0, b.p1)); }
-static inline XPs ps_madds1(XPs a, XPs c, XPs b) { return xps(fmaf(a.p0, c.p1, b.p0), fmaf(a.p1, c.p1, b.p1)); }
+static inline XPs ps_madds0(XPs a, XPs c, XPs b) { return xps(XFmaf(a.p0, c.p0, b.p0), XFmaf(a.p1, c.p0, b.p1)); }
+static inline XPs ps_madds1(XPs a, XPs c, XPs b) { return xps(XFmaf(a.p0, c.p1, b.p0), XFmaf(a.p1, c.p1, b.p1)); }
 // ps_sum0 d,a,c,b = (a0 + b1, c1); ps_sum1 d,a,c,b = (c0, a0 + b1)
 static inline XPs ps_sum0(XPs a, XPs c, XPs b) { return xps(a.p0 + b.p1, c.p1); }
 static inline XPs ps_sum1(XPs a, XPs c, XPs b) { return xps(c.p0, a.p0 + b.p1); }

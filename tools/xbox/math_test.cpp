@@ -255,9 +255,34 @@ static void TestSkin()
     CHECK(far == 0);
 }
 
+static void TestFmaf()
+{
+    // XFmaf must equal the correctly rounded libm fmaf: random operands, cancellation, ties, specials
+    uint32_t x = 12345u;
+    auto rnd = [&]() { x = x * 1664525u + 1013904223u; return x; };
+    auto fl = [&](uint32_t bits) { float f; memcpy(&f, &bits, 4); return f; };
+    int bad = 0;
+    for (int i = 0; i < 2000000; i++) {
+        float a = fl(rnd()), b = fl(rnd()), c = fl(rnd());
+        if (i & 1) {   // bring the exponents close so the sum cancels / rounds at the edge
+            a = fl((rnd() & 0x807FFFFFu) | 0x3F800000u);
+            b = fl((rnd() & 0x807FFFFFu) | 0x3F800000u);
+            c = -(a * b) + fl(rnd() & 0x33800000u);
+        }
+        float r = XFmaf(a, b, c), e = fmaf(a, b, c);
+        if (!(memcmp(&r, &e, 4) == 0 || (r != r && e != e))) { if (bad++ < 5) printf("fmaf a=%a b=%a c=%a got %a want %a\n", a, b, c, r, e); }
+    }
+    CHECK(bad == 0);
+    CHECK(XFmaf(2.0f, 3.0f, 1.0f) == 7.0f);
+    CHECK(XFmaf(1e30f, 1e30f, -1e30f * 1e30f) == fmaf(1e30f, 1e30f, -1e30f * 1e30f));
+    float inf = INFINITY;
+    CHECK(XFmaf(inf, 2.0f, 1.0f) == inf && XFmaf(0.0f, inf, 1.0f) != XFmaf(0.0f, inf, 1.0f));
+}
+
 int main()
 {
     XPs_InitGQR();
+    TestFmaf();
     TestInstructions();
     TestQuantized();
     TestReorder();
