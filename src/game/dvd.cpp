@@ -661,7 +661,12 @@ void cDvdQueue::readMain()
         case TRANS_ARAM:
             m_LeftSize = (*ph)->size;
             if ((*ph)->dest) {
+#ifdef RE4_XBOX
+                // an explicit MRAM destination is a GameCube address (0x8xxxxxxx); ARAM ones are not memory
+                m_TransAddr = ((*ph)->type == TRANS_MRAM && (*ph)->dest >= 0x80000000u) ? XMEM_ADDR((*ph)->dest) : (*ph)->dest;
+#else
                 m_TransAddr = (*ph)->dest;
+#endif
             } else if ((*ph)->type == TRANS_MRAM) {
                 m_TransAddr = m_MramAddr;
             } else {
