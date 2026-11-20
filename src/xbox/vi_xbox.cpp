@@ -165,12 +165,19 @@ void VISetBlack(BOOL black)
 
 void VIFlush(void)
 {
-    s_traceBudget = 4;
+    static int s_flushes;
+    int tr = s_flushes < 3;   // describe only the first flushes on the console: the frame loop would bury everything else
+    s_flushes++;
+    s_traceBudget = tr ? 4 : 0;
     VI_CRUMB("VIFlush enter");
-    VI_TRACE("VIFlush: enter");
+    if (tr) {
+        VI_TRACE("VIFlush: enter");
+    }
     Advance();
     VI_CRUMB("VIFlush advanced");
-    VI_TRACE("VIFlush: advanced");
+    if (tr) {
+        VI_TRACE("VIFlush: advanced");
+    }
     if (!s_haveMode) {  // never configured: keep the current mode
         s_flushedTv = s_tv;
         s_flushedScan = s_scan;
