@@ -27,6 +27,10 @@ extern "C" void ADXT_SetOutputMono(int sw);   // lib/adx_tlk.c (the CRI headers 
 void* GetDataExt(void* arc, const char* tag, int no);
 
 
+#ifdef RE4_XBOX
+#include "xbox/xsnd_endian.h"
+#include "xbox/xtrace.h"
+#endif
 #define SND_FILE "D:/Bio4/Prog/snd.cpp"
 #define SND_DATA_TOP XMEM_ADDR(0x80370000)
 #define LOOP_IDX(x, max) ((x) < 0 ? (max) : ((x) > (max) ? 0 : (x)))
@@ -91,6 +95,10 @@ void SndInit()
 #line 120 SND_FILE
     r = DvdRead(0, (void*) SND_DATA_TOP, 0, 0, 0, 0x11, __FILE__, __LINE__);
     str_flag = Dvd.ReadCheck(r, &len, 0, 0) > 0;
+#ifdef RE4_XBOX
+    // GameCube disc data is big-endian; the offsets below are read as native u32
+    XTrace_Add(XSnd_SwapStrHed((void*) SND_DATA_TOP, (unsigned) len) ? "snd: bio4str.hed converted\n" : "snd: bio4str.hed convert FAILED\n");
+#endif
     adr = SND_DATA_TOP + ALIGN32(len);
     for (i = 0; i < 2; i++) {
         SndMem.str_file[i] = (SndStrFile*) (SND_DATA_TOP + ((u32*) SND_DATA_TOP)[i]);
