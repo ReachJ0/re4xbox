@@ -107,10 +107,10 @@ void Render_init()
 
     SetTvMode(rm);
     RE4_TRACE("Render_init: SetTvMode");
-    pFrame_buff[0] = (void*) 0x80460000;
+    pFrame_buff[0] = XMEM_PTR(0x80460000);
     pCurrent_buff = pFrame_buff[1] =
-        (void*) (0x80460000 + VIPadFrameBufferWidth(rm->viWidth) * rm->xfbHeight * 2);
-    DefaultFifo = (void*) 0x803F0000;
+        (void*) (XMEM_ADDR(0x80460000) + VIPadFrameBufferWidth(rm->viWidth) * rm->xfbHeight * 2);
+    DefaultFifo = XMEM_PTR(0x803F0000);
     VIConfigure(rm);
     RE4_TRACE("Render_init: VIConfigure");
     DefaultFifoObj = GXInit(DefaultFifo, 0x70000);

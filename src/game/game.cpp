@@ -1289,14 +1289,14 @@ void gameRoomMemInit()
 {
     if (SysFlagChk(pG, SYS_DOORDEMO)) {
         MemReplaceHeap(3, 4);
-        MemorySwap((void*) 0x807EC000, (void*) ARAM_FREE_BASE, 0x188000);
-        memclr_asm((void*) 0x807EC000, 0x188000);
-        MemCreateHeap(10, (void*) 0x807EC000, (void*) 0x80974000);
+        MemorySwap(XMEM_PTR(0x807EC000), (void*) ARAM_FREE_BASE, 0x188000);
+        memclr_asm(XMEM_PTR(0x807EC000), 0x188000);
+        MemCreateHeap(10, XMEM_PTR(0x807EC000), XMEM_PTR(0x80974000));
         MemSetCurrentHeap(10);
     } else {
         if (SysFlagChk(pG, SYS_DOOR_AFTER)) {
             MemDestroyHeap(10);
-            MemorySwap((void*) 0x807EC000, (void*) ARAM_FREE_BASE, 0x188000);
+            MemorySwap(XMEM_PTR(0x807EC000), (void*) ARAM_FREE_BASE, 0x188000);
         } else {
             MemReplaceHeap(3, 4);
         }

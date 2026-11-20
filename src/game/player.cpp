@@ -204,7 +204,7 @@ cPlayer::cPlayer()
     stat.reset();
     pPL = this;
     hp = pG->pl_life;
-    subArc = (PlArc*)0x807EC000;
+    subArc = (PlArc*)XMEM_ADDR(0x807EC000);
     m_MotTbl = (void**) PL_MEM_ALLOC(0x1B4, 373);
     memclr_asm(m_MotTbl, 0x1B4);
     m_MotTbl2 = (void**) PL_MEM_ALLOC(0x30, 376);
