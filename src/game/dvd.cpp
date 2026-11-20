@@ -527,6 +527,21 @@ void cDvdQueue::readInit()
             m_Rno0 = 3;
             break;
         }
+#ifdef RE4_XBOX
+        if (CkFlag(0x80000000) || m_NestDepth != 0) {
+            // the header table comes off the disc big-endian: 8 u32 per entry, up to the TRANS_EOF entry
+            DvdHeader* e = (DvdHeader*) &header_buff[m_NestDepth << 10];
+            for (int n = 0; n < 0x400 / (int) sizeof(DvdHeader); n++, e++) {
+                u32* q = (u32*) e;
+                for (int k = 0; k < 8; k++) {
+                    q[k] = __builtin_bswap32(q[k]);
+                }
+                if (e->type == (u32) TRANS_EOF) {
+                    break;
+                }
+            }
+        }
+#endif
         if (CkFlag(0x6) && m_NestDepth == 0) {
             m_Rno1++;
         } else {
