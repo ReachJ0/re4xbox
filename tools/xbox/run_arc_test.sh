@@ -1,0 +1,10 @@
+#!/bin/sh
+# Builds and runs the host test of the archive offset table conversion (src/xbox/xarc_endian.cpp).
+set -eu
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+OUT=${TMPDIR:-/tmp}/re4_arc_test.$$
+mkdir -p "$OUT"
+trap 'rm -rf "$OUT"' EXIT
+${CXX:-c++} -std=gnu++11 -Wall -Wextra -g -fsanitize=address,undefined ${EXTRA:-} -DRE4_XBOX -I "$ROOT/include" \
+    "$ROOT/tools/xbox/arc_endian_test.cpp" "$ROOT/src/xbox/xarc_endian.cpp" -o "$OUT/arc_test"
+"$OUT/arc_test"

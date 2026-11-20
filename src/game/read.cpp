@@ -1,5 +1,10 @@
 // game/read: room / core / option / enemy / player / weapon data loading (D:/Bio4/Prog/read.cpp).
 // In readEmData, the do-while(0) around the DLL_MALLOC clear gives `m` enough weight to keep r29.
+#ifdef RE4_XBOX
+#include "xbox/xarc_endian.h"
+#include "xbox/xtex_endian.h"
+#include "xbox/xtrace.h"
+#endif
 #include "types.h"
 #include "atari.h"
 #include "light.h"
@@ -198,6 +203,24 @@ void CoreDataRead()
 #line 219 "D:/Bio4/Prog/read.cpp"
     req = DVD_READ(3, CORE_DATA_ADDR, 0, 0, 0, 0x8001);
     Dvd.ReadCheck(req, &info);
+#ifdef RE4_XBOX
+    {
+        // the archive comes off the disc big-endian: first its offset table (CORE_ARC reads it as u32), then
+        // the five texture palettes that are initialised right below
+        static const int tpls[5] = {CORE_SPECULAR_0, CORE_SPECULAR_1, CORE_SPECULAR_2, CORE_SPECULAR_3, CORE_GLOBAL_ILLUMINATION};
+        unsigned coreLen = (unsigned) info.read_size[0][0];
+        if (XArc_SwapTable(pG->pCore, coreLen, 4)) {
+            for (int i = 0; i < 5; i++) {
+                unsigned off = ((u32*) pG->pCore)[tpls[i]];
+                if (off < coreLen) {
+                    XTex_SwapTpl((u8*) pG->pCore + off, coreLen - off);
+                }
+            }
+        } else {
+            XTrace_Add("core.das: offset table not converted\n");
+        }
+    }
+#endif
     SpecularInit((TEXPalette*) CORE_ARC(CORE_SPECULAR_0), (TEXPalette*) CORE_ARC(CORE_SPECULAR_1), (TEXPalette*) CORE_ARC(CORE_SPECULAR_2),
                  (TEXPalette*) CORE_ARC(CORE_SPECULAR_3));
     GlobalIlmTexInit((TEXPalette*) CORE_ARC(CORE_GLOBAL_ILLUMINATION));
