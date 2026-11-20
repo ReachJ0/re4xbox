@@ -600,7 +600,7 @@ void ErrorHandler(OSError error, OSContext* context, ...)
         EprintfFlush();
         Render_done();
         Render_swap();
-        while (vsync_cnt < GetSystemVcnt()) {}
+        SPIN_VSYNC(vsync_cnt < GetSystemVcnt())
         vsync_cnt = 0;
         if (OSGetResetButtonState() == 1) {
             OSResetSystem(1, 0, 0);

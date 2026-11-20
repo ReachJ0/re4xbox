@@ -26,6 +26,21 @@ typedef int BOOL;
 #define XRETV(v)
 #endif
 
+// The game waits for vsync with an empty loop (`while (vsync_cnt < n) {}`); the counter is raised by the VI
+// post-retrace callback, an interrupt on the GameCube. The Xbox VI runs its retraces on a virtual clock whenever
+// the game calls into VI, so an empty loop would never see the counter move: here the loop waits for the next
+// retrace, and the callbacks run on the game's own thread. Nothing changes in the GameCube build.
+#ifdef RE4_XBOX
+#ifdef __cplusplus
+extern "C" void VIWaitForRetrace(void);
+#else
+void VIWaitForRetrace(void);
+#endif
+#define SPIN_VSYNC(cond) while (cond) { VIWaitForRetrace(); }
+#else
+#define SPIN_VSYNC(cond) while (cond) {}
+#endif
+
 #ifndef NULL
 #define NULL 0
 #endif

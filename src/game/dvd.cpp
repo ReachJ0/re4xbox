@@ -1688,7 +1688,7 @@ int cDvd::ErrCheck(int disc_new, int proc)
             }
             Render_done();
             Render_swap();
-            while (vsync_cnt < (int) GetSystemVcnt()) {}
+            SPIN_VSYNC(vsync_cnt < (int) GetSystemVcnt())
             vsync_cnt = 0;
             if (m_ErrCode != -1) {
                 systemResetCheck();
@@ -1702,7 +1702,7 @@ int cDvd::ErrCheck(int disc_new, int proc)
         Render_before();
         Render_done();
         Render_swap();
-        while (vsync_cnt < (int) GetSystemVcnt()) {}
+        SPIN_VSYNC(vsync_cnt < (int) GetSystemVcnt())
         vsync_cnt = 0;
         if (Sofdec.IsActive()) {
             Sofdec.PlayPause(0);

@@ -209,10 +209,10 @@ RESTART:
             DC.check();
             Block.checkCondition();
             ProcessTickGet(3, "DRAW REMAIN");
-            while (vsync_cnt < GetSystemVcnt() - 1) {}
+            SPIN_VSYNC(vsync_cnt < GetSystemVcnt() - 1)
             Render_swap();
             PPCSync();
-            while (vsync_cnt < GetSystemVcnt()) {}
+            SPIN_VSYNC(vsync_cnt < GetSystemVcnt())
             vsync_cnt = 0;
             systemVSyncPost();
             SysFlagOff(pG, SYS_RENDER_END);
