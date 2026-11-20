@@ -20,6 +20,7 @@ extern "C" {
 
 static FILE* g_log;
 static int g_depth;
+static unsigned g_stkLo, g_stkHi;   // the crashing thread's stack (kernel: StackLimit .. StackBase), 0 if unknown
 
 // Readable RAM windows (64 MB mirrors). Anything else may fault: MMIO, unmapped, PCI.
 static int SafePtr(const void* p, unsigned n)
@@ -29,6 +30,7 @@ static int SafePtr(const void* p, unsigned n)
     if (a >= 0x00010000u && top <= 0x04000000u) return 1;  // low mirror: xbe, heap, stack
     if (a >= 0x80000000u && top <= 0x84000000u) return 1;  // cached mirror
     if (a >= 0xC0000000u && top <= 0xC4000000u) return 1;  // uncached mirror
+    if (g_stkHi && a >= g_stkLo && top <= g_stkHi) return 1;  // this thread's stack (0xD0000000 range)
     return 0;
 }
 
@@ -65,6 +67,16 @@ Hook(unsigned code, unsigned p1, unsigned p2, unsigned p3, unsigned p4)
         debugPrint("DOUBLE FAULT in crash handler\n");
         for (;;) __asm__ volatile("cli; hlt");
     }
+    {
+        PKTHREAD t = KeGetCurrentThread();
+        if (SafePtr(t, sizeof(KTHREAD))) {
+            unsigned lo = (unsigned) t->StackLimit, hi = (unsigned) t->StackBase;
+            if (lo < hi && hi - lo <= 0x400000u && (unsigned) sp >= lo && (unsigned) sp < hi) {
+                g_stkLo = lo;
+                g_stkHi = hi;
+            }
+        }
+    }
     XTrace_ShowTextScreen();   // pbkit may own the screen; switch to the text one
     debugClearScreen();        // the report must fit on one screen
     nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\");   // no-op/fails if already mounted: ignored
@@ -77,6 +89,7 @@ Hook(unsigned code, unsigned p1, unsigned p2, unsigned p3, unsigned p4)
     Both("*** RE4 CRASH *** bugcheck %08x\n", code);
     Both("exception %08x at eip %08x\n", p1, eip);
     Both("%s of %08x, esp %08x\n", kind, fault, (unsigned) sp);
+    Both("stack %08x..%08x\n", g_stkLo, g_stkHi);
 
     // 16 code bytes at EIP (only if inside readable RAM)
     if (eip && SafePtr((const void*) (eip - 8), 24)) {
@@ -115,7 +128,7 @@ Hook(unsigned code, unsigned p1, unsigned p2, unsigned p3, unsigned p4)
     }
 
     Both("last trace:\n");   // what the game said before it died
-    for (i = XTRACE_NLINES - 7; i < XTRACE_NLINES; i++) {
+    for (i = XTRACE_NLINES - 5; i < XTRACE_NLINES; i++) {
         const char* l = XTrace_Line(i);
         if (l[0]) Both(" %s\n", l);
     }
