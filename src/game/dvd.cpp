@@ -1,4 +1,7 @@
 // game/dvd: DVD read queue, ARAM DMA queue and disc error screen (D:/Bio4/Prog/dvd.cpp).
+#ifdef RE4_XBOX
+#include "xbox/xsnd_endian.h"
+#endif
 #include "types.h"
 #include "dvd.h"
 
@@ -793,6 +796,12 @@ void cDvdQueue::readMain()
         if (m_LeftSize <= 0) {
             switch ((*ph)->type) {
             case 2:
+#ifdef RE4_XBOX
+                // the part before this PCM part is the MRAM part of the same block: its size bounds the conversion
+                {
+                    g_XSndBlkLen = ((*ph)[-1].type == TRANS_SND_BLK) ? (*ph)[-1].size : 0x4000;
+                }
+#endif
                 SndBlkInit((*ph)->sndType, (*ph)->sndArg, (*ph)->sndNo);
                 break;
             case 0:

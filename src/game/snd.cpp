@@ -2516,6 +2516,10 @@ void SndBlkInit(int type, int id, int no)
     }
     Snd_iss_blk[blk].pcm_adrs = SndMem.blk_aram[blk];
     adr = (u32) SndMem.blk_mram[blk];
+#ifdef RE4_XBOX
+    // the block comes off the disc big-endian (g_XSndBlkLen: size of its MRAM part, set by the DVD layer)
+    XSnd_SwapIssBlk((void*) adr, g_XSndBlkLen, blk != 3 && blk != 4);
+#endif
     if (blk != 3 && blk != 4) {
         adr += *(u32*) adr;
     }

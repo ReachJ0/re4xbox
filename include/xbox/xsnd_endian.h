@@ -28,6 +28,16 @@ int XSnd_SwapDoorTbl(void* data, unsigned len);
 // { u32 num; SndBgmEnt e[num] } with SndBgmEnt = 13 u32.
 int XSnd_SwapBgmTbl(void* data, unsigned len);
 
+// A sound block (ISS: the MRAM part of a TRANS_SND_BLK, "CORE", "PL", enemy and BGM blocks). `outer` is non-zero
+// for the blocks that begin with a u32 offset to the real header (every block but BGM 3 / 4). Converts the offset,
+// the header { sit_num, wt_ofs, sit_ofs, seq_ofs }, the SIT table (0x18 bytes each: u16 at 0, 0xA, 0xC, 0x16) and
+// the sequence table (u32 count + u32 offsets). The wavetable (DLS) and the sequences themselves are left alone:
+// only the audio engine reads them, and there is none yet. `len` is the size of the block part.
+int XSnd_SwapIssBlk(void* data, unsigned len, int outer);
+
+// Size of the MRAM part of the sound block being registered: set by the DVD layer right before SndBlkInit.
+extern unsigned g_XSndBlkLen;
+
 #ifdef __cplusplus
 }
 #endif

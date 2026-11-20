@@ -12,6 +12,8 @@ const unsigned kRitSize = 0x10, kShdSize = 0x7C;
 
 }  // namespace
 
+extern "C" { unsigned g_XSndBlkLen = 0x4000; }
+
 extern "C" int XSnd_SwapStrHed(void* data, unsigned len)
 {
     unsigned char* d = (unsigned char*) data;
@@ -146,6 +148,51 @@ extern "C" int XSnd_SwapBgmTbl(void* data, unsigned len)
         for (unsigned k = 0; k < num * 13; k++) {
             Sw32(d + at + 4 + k * 4);
         }
+    }
+    return ok;
+}
+
+extern "C" int XSnd_SwapIssBlk(void* data, unsigned len, int outer)
+{
+    unsigned char* d = (unsigned char*) data;
+    unsigned h = 0;
+    int ok = 1;
+
+    if (outer) {
+        if (len < 4) {
+            return 0;
+        }
+        h = Sw32(d);
+    }
+    if (h > len || len - h < 16) {
+        return 0;
+    }
+    unsigned char* b = d + h;
+    unsigned room = len - h;
+    unsigned sitNum = Sw32(b), wtOfs = Sw32(b + 4), sitOfs = Sw32(b + 8), seqOfs = Sw32(b + 12);
+    (void) wtOfs;
+    if (sitNum <= room / 0x18 && Fits(sitOfs, sitNum * 0x18, room)) {
+        for (unsigned i = 0; i < sitNum; i++) {
+            unsigned char* e = b + sitOfs + i * 0x18;
+            Sw16(e);
+            Sw16(e + 0x0A);
+            Sw16(e + 0x0C);
+            Sw16(e + 0x16);
+        }
+    } else {
+        ok = 0;
+    }
+    if (Fits(seqOfs, 4, room)) {
+        unsigned cnt = Sw32(b + seqOfs);
+        if (cnt <= 64 && Fits(seqOfs + 4, cnt * 4, room)) {
+            for (unsigned i = 0; i < cnt; i++) {
+                Sw32(b + seqOfs + 4 + i * 4);
+            }
+        } else {
+            ok = 0;
+        }
+    } else {
+        ok = 0;
     }
     return ok;
 }

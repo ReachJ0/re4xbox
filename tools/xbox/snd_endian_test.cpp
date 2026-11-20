@@ -78,8 +78,48 @@ static int TestOthers()
     return 0;
 }
 
+static void TestIss()
+{
+    // outer block: [u32 hdr offset 0x20] ... header at 0x20 {sit_num 2, wt 0x40, sit 0x30, seq 0x70}, SIT[2] at hdr+0x30,
+    // sequence table at hdr+0x70 {count 2, ofs 0x10 0x20}
+    unsigned char b[0x200] = {0};
+    P32(b, 0x20);
+    unsigned h = 0x20;
+    P32(b + h, 2); P32(b + h + 4, 0x40); P32(b + h + 8, 0x30); P32(b + h + 12, 0x70);
+    for (int i = 0; i < 2; i++) {
+        unsigned char* e = b + h + 0x30 + i * 0x18;
+        P16(e, 0x0100 + i); e[2] = 1; e[6] = 100; P16(e + 0x0A, 5); P16(e + 0x0C, 9); P16(e + 0x16, 0x8004);
+    }
+    P32(b + h + 0x70, 2); P32(b + h + 0x74, 0x10); P32(b + h + 0x78, 0x20);
+    CHECK(XSnd_SwapIssBlk(b, sizeof b, 1) == 1);
+    CHECK(*(uint32_t*) b == 0x20 && *(uint32_t*) (b + h) == 2 && *(uint32_t*) (b + h + 8) == 0x30);
+    unsigned char* e1 = b + h + 0x30 + 0x18;
+    CHECK(*(uint16_t*) e1 == 0x0101 && e1[2] == 1 && e1[6] == 100 && *(uint16_t*) (e1 + 0x0A) == 5 && *(uint16_t*) (e1 + 0x0C) == 9 && *(uint16_t*) (e1 + 0x16) == 0x8004);
+    CHECK(*(uint32_t*) (b + h + 0x70) == 2 && *(uint32_t*) (b + h + 0x78) == 0x20);
+    // no outer offset (BGM blocks): header at 0
+    unsigned char c[0x100] = {0};
+    P32(c, 1); P32(c + 4, 0x40); P32(c + 8, 0x30); P32(c + 12, 0x60);
+    P16(c + 0x30, 7); P32(c + 0x60, 0);
+    CHECK(XSnd_SwapIssBlk(c, sizeof c, 0) == 1 && *(uint16_t*) (c + 0x30) == 7 && *(uint32_t*) (c + 8) == 0x30);
+    // hostile: every length, exact heap buffers
+    unsigned char big[0x200];
+    memcpy(big, b, sizeof big);
+    for (unsigned len = 0; len < 0x200; len += 3) {
+        unsigned char* g = (unsigned char*) malloc(len ? len : 1);
+        memcpy(g, big, len);
+        XSnd_SwapIssBlk(g, len, 1);
+        XSnd_SwapIssBlk(g, len, 0);
+        free(g);
+    }
+    unsigned char* bad = (unsigned char*) malloc(40);
+    memset(bad, 0xFF, 40);
+    CHECK(XSnd_SwapIssBlk(bad, 40, 1) == 0 && XSnd_SwapIssBlk(bad, 40, 0) == 0);
+    free(bad);
+}
+
 int main()
 {
+    TestIss();
     TestOthers();
     enum { N = 0x400 };
     unsigned char* f = (unsigned char*) calloc(1, N);
