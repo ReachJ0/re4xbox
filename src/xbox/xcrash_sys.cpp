@@ -67,15 +67,10 @@ Hook(unsigned code, unsigned p1, unsigned p2, unsigned p3, unsigned p4)
         debugPrint("DOUBLE FAULT in crash handler\n");
         for (;;) __asm__ volatile("cli; hlt");
     }
-    {
-        PKTHREAD t = KeGetCurrentThread();
-        if (SafePtr(t, sizeof(KTHREAD))) {
-            unsigned lo = (unsigned) t->StackLimit, hi = (unsigned) t->StackBase;
-            if (lo < hi && hi - lo <= 0x400000u && (unsigned) sp >= lo && (unsigned) sp < hi) {
-                g_stkLo = lo;
-                g_stkHi = hi;
-            }
-        }
+    // the thread stack lives in 0xD0000000..0xD4000000: the 4 KB above esp are inside it (we are in it), so readable
+    if ((unsigned) sp >= 0xD0000000u && (unsigned) sp < 0xD4000000u - 0x1000u) {
+        g_stkLo = (unsigned) sp;
+        g_stkHi = (unsigned) sp + 0x1000u;
     }
     XTrace_ShowTextScreen();   // pbkit may own the screen; switch to the text one
     debugClearScreen();        // the report must fit on one screen
