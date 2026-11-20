@@ -109,18 +109,27 @@ void SndInit()
 #line 133 SND_FILE
     r = DvdRead(0x60, (void*) adr, 0, 0, 0, 0x11, __FILE__, __LINE__);
     Dvd.ReadCheck(r, &len, 0, 0);
+#ifdef RE4_XBOX
+    XSnd_SwapU32Array((void*) adr, (unsigned) len);
+#endif
     adr += ALIGN32(len);
 
     SndMem.door_tbl = (SndDoorTbl*) adr;
 #line 140 SND_FILE
     r = DvdRead(0x68, (void*) adr, 0, 0, 0, 0x11, __FILE__, __LINE__);
     Dvd.ReadCheck(r, &len, 0, 0);
+#ifdef RE4_XBOX
+    XSnd_SwapDoorTbl((void*) adr, (unsigned) len);
+#endif
     adr += ALIGN32(len);
 
     SndMem.bgm_tbl = (SndBgmTbl*) adr;
 #line 147 SND_FILE
     r = DvdRead(0x6A, (void*) adr, 0, 0, 0, 0x11, __FILE__, __LINE__);
     Dvd.ReadCheck(r, &len, 0, 0);
+#ifdef RE4_XBOX
+    XSnd_SwapBgmTbl((void*) adr, (unsigned) len);
+#endif
     adr += ALIGN32(len);
 
     ARAM_FREE_BASE = 0x800000;

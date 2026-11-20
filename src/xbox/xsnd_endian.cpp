@@ -69,4 +69,84 @@ extern "C" int XSnd_SwapStrHed(void* data, unsigned len)
     }
     return ok;
 }
+
+namespace {
+inline bool Fits(unsigned ofs, unsigned size, unsigned len) { return ofs <= len && size <= len - ofs; }
+}  // namespace
+
+extern "C" int XSnd_SwapU32Array(void* data, unsigned len)
+{
+    unsigned char* d = (unsigned char*) data;
+    for (unsigned i = 0; i + 4 <= len; i += 4) {
+        Sw32(d + i);
+    }
+    return len >= 4;
+}
+
+extern "C" int XSnd_SwapDoorTbl(void* data, unsigned len)
+{
+    unsigned char* d = (unsigned char*) data;
+    if (len < 8) {
+        return 0;
+    }
+    unsigned fileOfs = Sw32(d), numOfs = Sw32(d + 4);
+    if (!Fits(numOfs, 2, len)) {
+        return 0;
+    }
+    unsigned cnt = Sw16(d + numOfs);
+    if (!Fits(fileOfs, cnt * 4, len)) {
+        return 0;
+    }
+    for (unsigned i = 0; i < cnt; i++) {
+        Sw32(d + fileOfs + i * 4);
+    }
+    return 1;
+}
+
+extern "C" int XSnd_SwapBgmTbl(void* data, unsigned len)
+{
+    unsigned char* d = (unsigned char*) data;
+    int ok = 1;
+    if (len < 8) {
+        return 0;
+    }
+    unsigned roomOfs = Sw32(d), listOfs = Sw32(d + 4);
+    unsigned rooms = 0;
+    if (listOfs > len) {
+        return 0;
+    }
+    // the id list: u16 until 0xFFFF (inclusive)
+    for (unsigned p = listOfs; p + 2 <= len; p += 2, rooms++) {
+        if (Sw16(d + p) == 0xFFFF) {
+            break;
+        }
+    }
+    if (!Fits(roomOfs, rooms * 4, len)) {
+        return 0;
+    }
+    for (unsigned i = 0; i < rooms; i++) {
+        unsigned rel = Sw32(d + roomOfs + i * 4);
+        unsigned at = roomOfs + rel;
+        bool shared = false;   // two rooms may point at the same block: convert it once
+        for (unsigned j = 0; j < i; j++) {
+            shared = shared || *(unsigned*) (d + roomOfs + j * 4) == rel;
+        }
+        if (shared) {
+            continue;
+        }
+        if (rel > len || !Fits(at, 4, len)) {
+            ok = 0;
+            continue;
+        }
+        unsigned num = Sw32(d + at);
+        if (num > 64 || !Fits(at + 4, num * 13 * 4, len)) {
+            ok = 0;
+            continue;
+        }
+        for (unsigned k = 0; k < num * 13; k++) {
+            Sw32(d + at + 4 + k * 4);
+        }
+    }
+    return ok;
+}
 #endif

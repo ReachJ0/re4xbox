@@ -35,8 +35,52 @@ static void MakeBlock(unsigned char* f, unsigned base, unsigned seed)
     }
 }
 
+static int TestOthers()
+{
+    // bio4midi.hed: array of u32
+    unsigned char a[16];
+    for (int i = 0; i < 4; i++) P32(a + i * 4, 0x60 + i);
+    CHECK(XSnd_SwapU32Array(a, 16) == 1 && ((uint32_t*) a)[0] == 0x60 && ((uint32_t*) a)[3] == 0x63);
+
+    // doorse.hed: { file_ofs 0x10, num_ofs 0x08 }, u16 count 3 at 8, u32 files at 0x10
+    unsigned char d[0x20] = {0};
+    P32(d, 0x10); P32(d + 4, 0x08); P16(d + 8, 3);
+    for (int i = 0; i < 3; i++) P32(d + 0x10 + i * 4, 0x100 + i);
+    CHECK(XSnd_SwapDoorTbl(d, sizeof d) == 1);
+    CHECK(*(uint32_t*) d == 0x10 && *(uint16_t*) (d + 8) == 3 && ((uint32_t*) (d + 0x10))[2] == 0x102);
+
+    // bgmtbl.dat: list at 0x08 (ids 5, 9, 11, 0xFFFF), room offsets at 0x10 (3 rooms; rooms 1 and 2 share a block)
+    unsigned char b[0x200] = {0};
+    P32(b, 0x10); P32(b + 4, 0x08);
+    P16(b + 8, 5); P16(b + 10, 9); P16(b + 12, 11); P16(b + 14, 0xFFFF);
+    unsigned blk0 = 0x40, blk1 = 0x100;
+    P32(b + 0x10, blk0 - 0x10); P32(b + 0x14, blk1 - 0x10); P32(b + 0x18, blk1 - 0x10);
+    P32(b + blk0, 2);                        // 2 entries
+    for (int k = 0; k < 26; k++) P32(b + blk0 + 4 + k * 4, 0x1000 + k);
+    P32(b + blk1, 1);
+    for (int k = 0; k < 13; k++) P32(b + blk1 + 4 + k * 4, 0x2000 + k);
+    CHECK(XSnd_SwapBgmTbl(b, sizeof b) == 1);
+    CHECK(*(uint32_t*) b == 0x10 && *(uint32_t*) (b + 4) == 8 && *(uint16_t*) (b + 14) == 0xFFFF && *(uint16_t*) (b + 10) == 9);
+    CHECK(*(uint32_t*) (b + 0x10) == blk0 - 0x10 && *(uint32_t*) (b + 0x18) == blk1 - 0x10);
+    CHECK(*(uint32_t*) (b + blk0) == 2 && *(uint32_t*) (b + blk0 + 4 + 25 * 4) == 0x1000 + 25);
+    CHECK(*(uint32_t*) (b + blk1) == 1 && *(uint32_t*) (b + blk1 + 4 + 12 * 4) == 0x2000 + 12);   // shared block: once
+    // hostile: truncated at every size, exact heap buffers
+    unsigned char orig[0x200];
+    memcpy(orig, b, sizeof b);   // (already converted: any content is fine for robustness)
+    for (unsigned len = 0; len < 0x200; len += 5) {
+        unsigned char* g = (unsigned char*) malloc(len ? len : 1);
+        memcpy(g, orig, len);
+        XSnd_SwapBgmTbl(g, len);
+        XSnd_SwapDoorTbl(g, len);
+        XSnd_SwapU32Array(g, len);
+        free(g);
+    }
+    return 0;
+}
+
 int main()
 {
+    TestOthers();
     enum { N = 0x400 };
     unsigned char* f = (unsigned char*) calloc(1, N);
     P32(f, 0x20);
