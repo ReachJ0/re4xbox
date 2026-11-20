@@ -1,4 +1,7 @@
 // game/mes: in-game message system (D:/Bio4/Prog/mes.cpp).
+#ifdef RE4_XBOX
+#include "xbox/xtex_endian.h"
+#endif
 #include "types.h"
 #include "vec.h"
 #include "model.h"
@@ -352,11 +355,19 @@ void MessageControl::releaseFont(int no)
 int MessageControl::loadFont(int w, int h, const char* name, int no)
 {
     int req = DvdReadN(name, m_font_addr[no], 0, 0, 0, 0x11, __FILE__, __LINE__);
-
+#ifdef RE4_XBOX
+    int fntLen = 0;
+    if (Dvd.ReadCheck(req, &fntLen, 0, 0) != 1) {
+#else
     if (Dvd.ReadCheck(req, 0, 0, 0) != 1) {
+#endif
         pLog->err(0, 0, "MesCtrl::fontLoad() Font load failed");
         return 0;
     }
+#ifdef RE4_XBOX
+    // the .fnt comes off the disc big-endian (offsets, TPL headers)
+    XTex_SwapFnt(m_font_addr[no], (unsigned) fntLen);
+#endif
     setupFont(w, h, (u8*) m_font_addr[no], no);
     return 1;
 }

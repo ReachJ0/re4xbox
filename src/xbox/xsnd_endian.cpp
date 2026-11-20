@@ -1,29 +1,12 @@
 // Big-endian -> little-endian conversion of the GameCube sound files (see include/xbox/xsnd_endian.h).
 #ifdef RE4_XBOX
 #include "xbox/xsnd_endian.h"
+#include "xbox/xswap.h"
 
 namespace {
 
-inline unsigned Rd32(const unsigned char* p) { return (unsigned) p[0] << 24 | (unsigned) p[1] << 16 | (unsigned) p[2] << 8 | p[3]; }
-
-// swaps the u32 at p in place (the bytes are big-endian before; little-endian after)
-inline unsigned Sw32(unsigned char* p)
-{
-    unsigned v = Rd32(p);
-    p[0] = (unsigned char) v;
-    p[1] = (unsigned char) (v >> 8);
-    p[2] = (unsigned char) (v >> 16);
-    p[3] = (unsigned char) (v >> 24);
-    return v;
-}
-
-inline unsigned Sw16(unsigned char* p)
-{
-    unsigned char t = p[0];
-    p[0] = p[1];
-    p[1] = t;
-    return (unsigned) p[0] | (unsigned) t << 8;   // value after the swap
-}
+inline unsigned Sw32(unsigned char* p) { return XSwap_32(p); }
+inline unsigned Sw16(unsigned char* p) { return XSwap_16(p); }
 
 const unsigned kRitSize = 0x10, kShdSize = 0x7C;
 
