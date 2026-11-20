@@ -114,6 +114,11 @@ Hook(unsigned code, unsigned p1, unsigned p2, unsigned p3, unsigned p4)
         Both("fault addr outside RAM (not dumped)\n");
     }
 
+    Both("last trace:\n");   // what the game said before it died
+    for (i = XTRACE_NLINES - 7; i < XTRACE_NLINES; i++) {
+        const char* l = XTrace_Line(i);
+        if (l[0]) Both(" %s\n", l);
+    }
     Both("full log: E:\\re4crash.log\n");
     Both("map: python3 tools/xbox/addr2sym.py xbox/main.map\n");
     if (g_log) { fclose(g_log); g_log = 0; }

@@ -207,6 +207,12 @@ void XViBackend_Present(const void* fb, int black, int, int)
     InterlockedExchange(&s_pbBusy, 0);
 }
 
+const char* XTrace_Line(int i)
+{
+    if (i < 0 || i >= TRACE_LINES) return "";
+    return s_lines[(s_head + 1 + i) % TRACE_LINES];
+}
+
 void XTrace_ShowTextScreen(void)
 {
     if (s_state > 0) {

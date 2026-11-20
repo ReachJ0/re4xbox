@@ -16,6 +16,10 @@ void XTrace_Add(const char* text);
 // (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
 void XTrace_Crumb(const char* text);
 
+// Line i (0 = oldest, 10 = the one being written) of the trace ring, "" if empty. For the crash report.
+const char* XTrace_Line(int i);
+#define XTRACE_NLINES 11
+
 // Switches the display to the CPU-drawn text screen of nxdk (pbkit may be showing its own frame).
 void XTrace_ShowTextScreen(void);
 
