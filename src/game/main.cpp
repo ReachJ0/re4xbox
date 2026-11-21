@@ -217,7 +217,7 @@ RESTART:
             systemVSyncPost();
             SysFlagOff(pG, SYS_RENDER_END);
             ProcessTickGet(0, "PROCESS TOTAL");
-            XFRM_END XFRM(5 end)ret = systemResetCheck();
+            XFRM(5 end)XFRM_END ret = systemResetCheck();
             if (ret == 1) {
                 goto RESTART;
             }

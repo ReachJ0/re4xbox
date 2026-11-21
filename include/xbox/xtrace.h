@@ -43,7 +43,7 @@ void XTrace_HaltForever(void);
 // Per-frame breadcrumbs of the first 4 frames of the main loop (main.cpp). Written inline so no line numbers move.
 #define XFRM_DECL int xFrame = 0;
 #define XFRM(txt) if (xFrame < 4) { XTrace_Add("fr " #txt "\n"); }
-#define XFRM_END xFrame++;
+#define XFRM_END xFrame++; if (xFrame % 120 == 0) { XTrace_Val("fr beat", xFrame, 0); }
 #define XFRMV(txt, a, b) if (xFrame < 4) { XTrace_Val("fr " #txt, (int) (a), (int) (b)); }
 #else
 #define RE4_TRACE(s)
