@@ -8,6 +8,9 @@
 
 extern "C" {
 
+// The host tests of the GX layer do not link the thread layer; the Xbox build overrides this with the real one.
+__attribute__((weak)) OSContext* OSGetCurrentContext(void) { return 0; }
+
 #define XGX_NUM_INTR 32
 static __OSInterruptHandler s_handlers[XGX_NUM_INTR];
 static OSInterruptMask s_mask;
@@ -60,7 +63,9 @@ int XGx_DeliverInterrupts(void)
         }
         s_pending &= ~(1u << i);
         if (s_handlers[i]) {
-            s_handlers[i]((__OSInterrupt) i, 0);
+            // The SDK handlers end with OSSetCurrentContext(context): hand them the context that was current, or the
+            // thread scheduler would be left with no current context and never switch threads again.
+            s_handlers[i]((__OSInterrupt) i, OSGetCurrentContext());
             n++;
         }
     }
