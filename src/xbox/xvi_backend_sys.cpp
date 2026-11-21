@@ -62,6 +62,17 @@ static volatile unsigned s_dbgPresents, s_dbgBlits;
 static volatile int s_dbgBlack = -1, s_dbgW, s_dbgH;
 static const void* volatile s_dbgFb;
 
+static volatile int s_card[4] = {-1, -1, -1, -1};
+static volatile unsigned s_cardStatus;
+void XTrace_CardState(int a, int b, int c, int d)
+{
+    s_card[0] = a;
+    s_card[1] = b;
+    s_card[2] = c;
+    s_card[3] = d;
+}
+void XTrace_CardStatus(unsigned status) { s_cardStatus = status; }
+
 void XTrace_Beat(int frame)
 {
     const XGpState* st = XGp_State();
@@ -71,6 +82,8 @@ void XTrace_Beat(int frame)
     XTrace_Add(t);
     snprintf(t, sizeof(t), "vi n%u blk%d fb%p %dx%d blit%u\n", s_dbgPresents, s_dbgBlack, s_dbgFb, s_dbgW, s_dbgH,
              s_dbgBlits);
+    XTrace_Add(t);
+    snprintf(t, sizeof(t), "card st%08x m%d r%d.%d.%d\n", s_cardStatus, s_card[0], s_card[1], s_card[2], s_card[3]);
     XTrace_Add(t);
 }
 

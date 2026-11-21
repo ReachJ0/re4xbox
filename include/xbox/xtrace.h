@@ -21,6 +21,10 @@ void XTrace_Beat(int frame);
 // "label a b c d" as one line (development counters).
 void XTrace_Val4(const char* label, int a, int b, int c, int d);
 
+// Last state of the memory card task (mode, Rno0, Rno1, Rno2) and the game's CardStatus: printed by the heartbeat.
+void XTrace_CardState(int a, int b, int c, int d);
+void XTrace_CardStatus(unsigned status);
+
 // A breadcrumb: kept in a separate small ring that is never drawn on the frame. Only the hang watchdog shows it
 // (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
 void XTrace_Crumb(const char* text);
@@ -47,13 +51,11 @@ void XTrace_HaltForever(void);
 #ifdef RE4_XBOX
 #define RE4_TRACE(s) XTrace_Add(s "\n")
 // Per-frame breadcrumbs of the first 4 frames of the main loop (main.cpp). Written inline so no line numbers move.
-// Memory card task (card.cpp MainLoop): prints (mode, Rno0, Rno1, Rno2) whenever it changes, at most 40 lines.
-#define XCARD_TRACE(a, b, c, d) { static int k[4] = {-1, -1, -1, -1}; static int n; \
-    if (n < 40 && (k[0] != (a) || k[1] != (b) || k[2] != (c) || k[3] != (d))) { \
-        k[0] = (a); k[1] = (b); k[2] = (c); k[3] = (d); n++; XTrace_Val4("card", k[0], k[1], k[2], k[3]); } }
+// Memory card task (card.cpp MainLoop): records (mode, Rno0, Rno1, Rno2) every pass; the heartbeat prints it.
+#define XCARD_TRACE(a, b, c, d) XTrace_CardState((a), (b), (c), (d));
 #define XFRM_DECL int xFrame = 0;
 #define XFRM(txt) if (xFrame < 4) { XTrace_Add("fr " #txt "\n"); }
-#define XFRM_END xFrame++; if (xFrame % 60 == 0) { XTrace_Beat(xFrame); }
+#define XFRM_END xFrame++; if (xFrame % 60 == 0) { XTrace_CardStatus((unsigned) pG->CardStatus); XTrace_Beat(xFrame); }
 #define XFRMV(txt, a, b) if (xFrame < 4) { XTrace_Val("fr " #txt, (int) (a), (int) (b)); }
 #else
 #define RE4_TRACE(s)
