@@ -73,7 +73,14 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
         b[i].end = end;
         unsigned cnt = XSwap_Rd32(d + offs[i]);
         if (cnt > (end - offs[i]) / 4 - 1) {   // count + ofs[count] must fit in the block
+            unsigned was = XMes_Diag[0];
             Reject(d, len, 5);
+            if (was == 0) {   // for this reason the words say which block failed: offset, end, count, index
+                XMes_Diag[2] = offs[i];
+                XMes_Diag[3] = end;
+                XMes_Diag[4] = cnt;
+                XMes_Diag[5] = (unsigned) i;
+            }
             return 0;
         }
     }
