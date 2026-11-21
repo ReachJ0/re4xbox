@@ -121,7 +121,7 @@ void TaskSchedulerMain(TASK* pT)
             return;
         }
         pT->Status = TASK_RUN;
-        OSWakeupThread(&pT->Queue);
+        XMARK(6) OSWakeupThread(&pT->Queue);
         GXSetCurrentGXThread();
         break;
     case TASK_RUN:
@@ -235,7 +235,7 @@ void TaskSleep(int ctr)
     if (pCTask->Priority > 0xF) {
         OSSignalSemaphore(&Sema);
     }
-    OSSleepThread(&pCTask->Queue);
+    XMARK(9) OSSleepThread(&pCTask->Queue); XMARK(7)
     if (pParentThread != NULL) {
         OSSuspendThread(pParentThread);
     }
