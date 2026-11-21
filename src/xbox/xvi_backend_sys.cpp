@@ -58,12 +58,19 @@ static void Unlock(void) { InterlockedExchange(&s_lock, 0); }
 
 static volatile LONG s_traceSeq;   // bumped by every XTrace_Add: the watchdog redraws when it changes
 
+static volatile unsigned s_dbgPresents, s_dbgBlits;
+static volatile int s_dbgBlack = -1, s_dbgW, s_dbgH;
+static const void* volatile s_dbgFb;
+
 void XTrace_Beat(int frame)
 {
     const XGpState* st = XGp_State();
     char t[96];
     snprintf(t, sizeof(t), "beat %d d%u v%u t%u c%u p%u\n", frame, (unsigned) st->draws, (unsigned) st->verts,
              (unsigned) XRaster_Triangles(), XRaster_CopySerial(), XGp_Pending());
+    XTrace_Add(t);
+    snprintf(t, sizeof(t), "vi n%u blk%d fb%p %dx%d blit%u\n", s_dbgPresents, s_dbgBlack, s_dbgFb, s_dbgW, s_dbgH,
+             s_dbgBlits);
     XTrace_Add(t);
 }
 
@@ -244,10 +251,18 @@ void XViBackend_Present(const void* fb, int black, int w, int h)
 #ifdef RE4_DEBUGSCREEN
     static unsigned s_shownSerial = 0xFFFFFFFFu;
     static const void* s_shownFb;
+    s_dbgPresents++;
+    s_dbgBlack = black;
+    s_dbgFb = fb;
+    s_dbgW = w;
+    s_dbgH = h;
     if (!black && fb && (XRaster_CopySerial() != s_shownSerial || fb != s_shownFb)) {
         s_shownSerial = XRaster_CopySerial();
         s_shownFb = fb;
-        if (XRaster_CopySerial()) BlitXfb((const unsigned char*) fb, w, h);
+        if (XRaster_CopySerial()) {
+            s_dbgBlits++;
+            BlitXfb((const unsigned char*) fb, w, h);
+        }
     }
 #else
     (void) w;
