@@ -2145,7 +2145,7 @@ void cCard::MainLoop(int arg)
             eprintf(24, 32, 0, 0, "%d", m_StrTimer);
         }
         TaskSleep(1);
-        (this->*tbl[m_Rno0][arg])();
+        XCARD_TRACE(arg, m_Rno0, m_Rno1, m_Rno2) (this->*tbl[m_Rno0][arg])();
         if (dispFlag == 1) {
             screenTrans();
         }

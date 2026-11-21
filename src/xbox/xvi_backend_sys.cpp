@@ -74,6 +74,13 @@ void XTrace_Beat(int frame)
     XTrace_Add(t);
 }
 
+void XTrace_Val4(const char* label, int a, int b, int c, int d)
+{
+    char t[64];
+    snprintf(t, sizeof(t), "%s %d %d %d %d\n", label, a, b, c, d);
+    XTrace_Add(t);
+}
+
 void XTrace_Val(const char* label, int a, int b)
 {
     char t[48];

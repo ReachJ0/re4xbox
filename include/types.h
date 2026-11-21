@@ -37,9 +37,11 @@ extern "C" void VIWaitForRetrace(void);
 void VIWaitForRetrace(void);
 #endif
 #define SPIN_VSYNC(cond) while (cond) { VIWaitForRetrace(); }
+#include "xbox/xtrace.h"   // development traces (XFRM*, XCARD_TRACE, RE4_TRACE)
 #else
 #define SPIN_VSYNC(cond) while (cond) {}
 #define XFRM_DECL
+#define XCARD_TRACE(a, b, c, d)
 #define XFRM(txt)
 #define XFRM_END
 #define XFRMV(txt, a, b)
