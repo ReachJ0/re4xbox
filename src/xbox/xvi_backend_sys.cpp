@@ -90,13 +90,14 @@ static char s_subInfo[160];
 extern "C" void XSub_Convert(void* data, unsigned len)
 {
     const unsigned char* d = (const unsigned char*) data;
-    unsigned o0 = len >= 20 ? XSwap_Rd32(d + 16) : 0, o1 = len >= 24 ? XSwap_Rd32(d + 20) : 0, o2 = len >= 28 ? XSwap_Rd32(d + 24) : 0;
+    unsigned o0 = len >= 20 ? XSwap_Rd32(d + 16) : 0, o1 = len >= 24 ? XSwap_Rd32(d + 20) : 0, o2 = len >= 28 ? XSwap_Rd32(d + 24) : 0,
+             o3 = len >= 32 ? XSwap_Rd32(d + 28) : 0;
     unsigned w[4] = {0, 0, 0, 0};
     if (o1 && o1 + 16 <= len) {
         for (int i = 0; i < 4; i++) w[i] = XSwap_Rd32(d + o1 + i * 4);
     }
     int ok = XArc_SwapCardArc(data, len);
-    snprintf(s_subInfo, sizeof(s_subInfo), "sub ok%d len%x o%x/%x/%x m%x %x %x %x\n", ok, len, o0, o1, o2, w[0], w[1], w[2], w[3]);
+    snprintf(s_subInfo, sizeof(s_subInfo), "sub ok%d len%x o%x/%x/%x/%x m%x %x %x %x\n", ok, len, o0, o1, o2, o3, w[0], w[1], w[2], w[3]);
     XTrace_Add(s_subInfo);
 }
 
@@ -117,6 +118,21 @@ extern "C" int XMes_Check(const void* tbl, unsigned lang, int type)
                  (addr >= 0x10000 && addr < 0x40000000) ? t[0] : 0, (addr >= 0x10000 && addr < 0x40000000) ? t[1] : 0,
                  (addr >= 0x10000 && addr < 0x40000000) ? t[2] : 0, (addr >= 0x10000 && addr < 0x40000000) ? t[3] : 0);
         XTrace_Add(s_mesChk);
+        static char blk[2][110];
+        if (addr >= 0x10000 && addr < 0x40000000) {
+            for (int b = 0; b < 2; b++) {   // raw start of the language blocks 0 and 1, bytes in file order
+                unsigned bo = XSwap_Rd32((const unsigned char*) tbl + 4 + b * 4);
+                if (bo < 8 || bo > 0x100000) {
+                    snprintf(blk[b], sizeof(blk[b]), "blk%d @%x (not raw)\n", b, bo);
+                    XTrace_Add(blk[b]);
+                    continue;
+                }
+                const unsigned char* q = (const unsigned char*) tbl + bo;
+                snprintf(blk[b], sizeof(blk[b]), "blk%d @%x %08x %08x %08x %08x\n", b, XSwap_Rd32((const unsigned char*) tbl + 4 + b * 4),
+                         XSwap_Rd32(q), XSwap_Rd32(q + 4), XSwap_Rd32(q + 8), XSwap_Rd32(q + 12));
+                XTrace_Add(blk[b]);
+            }
+        }
         static char d[96];
         snprintf(d, sizeof(d), "mesdiag e%u len%x %x %x %x %x\n", XMes_Diag[0], XMes_Diag[1], XMes_Diag[2], XMes_Diag[3],
                  XMes_Diag[4], XMes_Diag[5]);
