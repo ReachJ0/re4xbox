@@ -70,8 +70,11 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
                 end = offs[k];
             }
         }
-        unsigned cnt = XSwap_Rd32(d + offs[i]);
-        if (cnt > (end - offs[i]) / 4 - 1) {   // count + ofs[count] must fit in the block
+        if (end - offs[i] < 8) {
+            continue;
+        }
+        unsigned cnt = XSwap_Rd32(d + offs[i] + 4);   // block = { u32 x0; u32 count; u32 ofs[count]; text }
+        if (cnt > (end - offs[i]) / 4 - 2) {   // x0 + count + ofs[count] must fit in the block
             // Not a message block (the disc keeps unused/other-format data in some language slots): leave it as it is
             // and convert the rest; the diagnostic keeps the first one: offset, end, count, index.
             unsigned was = XMes_Diag[0];
@@ -105,9 +108,9 @@ extern "C" int XMes_Swap(void* data, unsigned len)
         return 0;
     }
     for (int i = 0; i < nb; i++) {
-        unsigned cnt = XSwap_Rd32(d + b[i].off);
-        unsigned hdr = (1 + cnt) * 4;
-        for (unsigned w = 0; w < 1 + cnt; w++) {
+        unsigned cnt = XSwap_Rd32(d + b[i].off + 4);
+        unsigned hdr = (2 + cnt) * 4;
+        for (unsigned w = 0; w < 2 + cnt; w++) {
             XSwap_32(d + b[i].off + w * 4);
         }
         unsigned char* t = d + b[i].off + hdr;

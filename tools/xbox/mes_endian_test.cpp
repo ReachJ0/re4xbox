@@ -13,11 +13,11 @@ static void P16(unsigned char* b, unsigned v) { b[0] = v >> 8; b[1] = v; }
 static unsigned Make(unsigned char* d)
 {
     P32(d, 3); P32(d + 4, 0x10); P32(d + 8, 0x30); P32(d + 12, 0x30);
-    unsigned char* b0 = d + 0x10;                      // 0x10 .. 0x30
-    P32(b0, 2); P32(b0 + 4, 0xC); P32(b0 + 8, 0x10);
-    P16(b0 + 0xC, 0x0041); P16(b0 + 0xE, 0x0000); P16(b0 + 0x10, 0x1234); P16(b0 + 0x12, 0xFFFF);
+    unsigned char* b0 = d + 0x10;                      // 0x10 .. 0x30: { x0, count, ofs[count], text }
+    P32(b0, 0xF9EEB241); P32(b0 + 4, 2); P32(b0 + 8, 0x10); P32(b0 + 12, 0x14);
+    P16(b0 + 0x10, 0x0041); P16(b0 + 0x12, 0x0000); P16(b0 + 0x14, 0x1234); P16(b0 + 0x16, 0xFFFF);
     unsigned char* b1 = d + 0x30;                      // 0x30 .. 0x40
-    P32(b1, 1); P32(b1 + 4, 0x8); P16(b1 + 8, 0x5678); P16(b1 + 10, 0x0000);
+    P32(b1, 0x43EAB241); P32(b1 + 4, 1); P32(b1 + 8, 0xC); P16(b1 + 12, 0x5678); P16(b1 + 14, 0x0000);
     return 0x40;
 }
 
@@ -30,10 +30,11 @@ int main()
     uint32_t* t = (uint32_t*) d;
     CHECK(t[0] == 3 && t[1] == 0x10 && t[2] == 0x30 && t[3] == 0x30);
     uint32_t* b0 = (uint32_t*) (d + 0x10);
-    CHECK(b0[0] == 2 && b0[1] == 0xC && b0[2] == 0x10);
-    uint16_t* s0 = (uint16_t*) (d + 0x10 + 0xC);
+    CHECK(b0[0] == 0xF9EEB241 && b0[1] == 2 && b0[2] == 0x10 && b0[3] == 0x14);
+    uint16_t* s0 = (uint16_t*) (d + 0x10 + 0x10);
     CHECK(s0[0] == 0x41 && s0[1] == 0 && s0[2] == 0x1234 && s0[3] == 0xFFFF);
-    CHECK(*(uint32_t*) (d + 0x30) == 1 && *(uint32_t*) (d + 0x34) == 8 && *(uint16_t*) (d + 0x38) == 0x5678);
+    CHECK(*(uint32_t*) (d + 0x30) == 0x43EAB241 && *(uint32_t*) (d + 0x34) == 1 && *(uint32_t*) (d + 0x38) == 0xC &&
+          *(uint16_t*) (d + 0x3C) == 0x5678);
 
     // hostile: every length on exact heap buffers, and garbage
     for (unsigned len = 0; len <= n; len++) {
@@ -45,10 +46,10 @@ int main()
     }
     unsigned char bad[64]; memset(bad, 0xFF, sizeof bad);
     CHECK(XMes_Swap(bad, sizeof bad) == 0 && bad[0] == 0xFF);
-    unsigned char big[64]; memcpy(big, orig, n); P32(big + 0x10, 0x7FFFFFFF);   // count that does not fit
-    CHECK(XMes_Swap(big, n) == 1 && big[0x10] == 0x7F && big[0x13] == 0xFF);   // junk block left alone, the other converted
-    CHECK(*(uint32_t*) (big + 0x30) == 1 && *(uint32_t*) (big + 4) == 0x10 && *(uint16_t*) (big + 0x38) == 0x5678);
-    unsigned char both[64]; memcpy(both, orig, n); P32(both + 0x10, 0x7FFFFFFF); P32(both + 0x30, 0x7FFFFFFF);
+    unsigned char big[64]; memcpy(big, orig, n); P32(big + 0x14, 0x7FFFFFFF);   // count that does not fit
+    CHECK(XMes_Swap(big, n) == 1 && big[0x14] == 0x7F && big[0x17] == 0xFF);   // junk block left alone, the other converted
+    CHECK(*(uint32_t*) (big + 0x34) == 1 && *(uint32_t*) (big + 4) == 0x10 && *(uint16_t*) (big + 0x3C) == 0x5678);
+    unsigned char both[64]; memcpy(both, orig, n); P32(both + 0x14, 0x7FFFFFFF); P32(both + 0x34, 0x7FFFFFFF);
     CHECK(XMes_Swap(both, n) == 0 && both[0] == 0);   // no valid block: nothing touched
     unsigned char lowOff[0x40]; memcpy(lowOff, orig, n); P32(lowOff + 8, 0x4);  // offset inside the table
     CHECK(XMes_Swap(lowOff, n) == 0);

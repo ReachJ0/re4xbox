@@ -1,6 +1,6 @@
 // xbox/xmes_endian.h: the game's message files (core.das messages, the sub screen / card messages, room and event
 // text) converted in place from big-endian. Layout (MessageData::getAddr): u32 table[n] where table[1 + language] is
-// the offset of that language's block; a block is { u32 count; u32 ofs[count]; ... } with each ofs relative to the
+// the offset of that language's block; a block is { u32 x0; u32 count; u32 ofs[count]; ... } with each ofs relative to the
 // block, and the text is a stream of u16 (characters, control codes and their arguments are all u16).
 #ifndef XBOX_XMES_ENDIAN_H
 #define XBOX_XMES_ENDIAN_H

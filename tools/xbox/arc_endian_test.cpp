@@ -17,11 +17,11 @@ static void TestCardArc()
     unsigned char* t = a + 0x40;
     P32(t, 0x20AF30); P32(t + 4, 1); P32(t + 8, 0xC); P32(t + 0xC, 0x20); P32(t + 0x10, 0);
     P16(t + 0x20, 64); P16(t + 0x22, 32); P32(t + 0x24, 5); P32(t + 0x28, 0x60);
-    P32(a + 0x100, 2); P32(a + 0x104, 8); P32(a + 0x108, 1); P32(a + 0x10C, 8); P16(a + 0x110, 0x0041);   // message table
+    P32(a + 0x100, 2); P32(a + 0x104, 8); P32(a + 0x108, 0x43EAB241); P32(a + 0x10C, 1); P32(a + 0x110, 0xC); P16(a + 0x114, 0x0041);   // message table
     CHECK(XArc_SwapCardArc(a, sizeof a) == 1);
     CHECK(((uint32_t*) a)[4] == 0x40 && ((uint32_t*) a)[5] == 0x100);
     CHECK(*(uint32_t*) (t + 4) == 1 && *(uint32_t*) (t + 0xC) == 0x20 && *(uint16_t*) (t + 0x20) == 64 && *(uint32_t*) (t + 0x24) == 5);
-    CHECK(*(uint32_t*) (a + 0x100) == 2 && *(uint32_t*) (a + 0x104) == 8 && *(uint16_t*) (a + 0x110) == 0x41);   // messages converted
+    CHECK(*(uint32_t*) (a + 0x100) == 2 && *(uint32_t*) (a + 0x104) == 8 && *(uint32_t*) (a + 0x108) == 0x43EAB241 && *(uint32_t*) (a + 0x110) == 0xC && *(uint16_t*) (a + 0x114) == 0x41);   // messages converted
     unsigned char bad[0x40]; memset(bad, 0xEE, sizeof bad);
     CHECK(XArc_SwapCardArc(bad, sizeof bad) == 0);
     unsigned char* g = (unsigned char*) malloc(0x50);
