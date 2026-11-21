@@ -220,7 +220,7 @@ void CoreDataRead()
             static const int mes[3] = {CORE_MESSAGE, CORE_MESSAGE_3, CORE_TV_MODE_MESSAGE};
             for (int i = 0; i < 3; i++) {
                 unsigned off = ((u32*) pG->pCore)[mes[i]];
-                unsigned end = XArc_SubEnd((u32*) pG->pCore, 0x40, off, coreLen);
+                unsigned end = XArc_SubEnd((const unsigned*) pG->pCore, 0x40, off, coreLen);
                 if (off >= coreLen || !XMes_Swap((u8*) pG->pCore + off, end - off)) {
                     XTrace_Add("core.das: messages not converted\n");
                 }
