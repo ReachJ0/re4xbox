@@ -100,6 +100,27 @@ extern "C" void XSub_Convert(void* data, unsigned len)
     XTrace_Add(s_subInfo);
 }
 
+// Sanity check of a message table before MessageData dereferences it; the first failure is kept for the heartbeat.
+static char s_mesChk[128];
+extern "C" int XMes_Check(const void* tbl, unsigned lang, int type)
+{
+    const unsigned* t = (const unsigned*) tbl;
+    unsigned addr = (unsigned) tbl;
+    if (addr >= 0x10000 && addr < 0x40000000 && lang < 16) {
+        unsigned ofs = t[lang + 1];
+        if (ofs >= 8 && ofs < 0x1000000) {
+            return 1;
+        }
+    }
+    if (!s_mesChk[0]) {
+        snprintf(s_mesChk, sizeof(s_mesChk), "mescheck ty%d lang%u tbl%08x: %08x %08x %08x %08x\n", type, lang, addr,
+                 (addr >= 0x10000 && addr < 0x40000000) ? t[0] : 0, (addr >= 0x10000 && addr < 0x40000000) ? t[1] : 0,
+                 (addr >= 0x10000 && addr < 0x40000000) ? t[2] : 0, (addr >= 0x10000 && addr < 0x40000000) ? t[3] : 0);
+        XTrace_Add(s_mesChk);
+    }
+    return 0;
+}
+
 extern "C" void XOs_ThreadDbg(int*, unsigned*, int*, int*, int*, int*);
 
 void XTrace_Beat(int frame)
@@ -120,6 +141,9 @@ void XTrace_Beat(int frame)
         XTrace_Add(t);
     }
     XTrace_Add(s_subInfo[0] ? s_subInfo : "sub: not run\n");
+    if (s_mesChk[0]) {
+        XTrace_Add(s_mesChk);
+    }
     if (XMes_Diag[0]) {
         snprintf(t, sizeof(t), "mes err%u len%x %x %x %x %x\n", XMes_Diag[0], XMes_Diag[1], XMes_Diag[2], XMes_Diag[3],
                  XMes_Diag[4], XMes_Diag[5]);

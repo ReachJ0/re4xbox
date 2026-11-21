@@ -241,7 +241,7 @@ struct MesTblBlock {
 // 4 ...) for the current language; NULL when out of range.
 u16* MessageData::getAddr(int no, int data_type)
 {
-    u32* tbl = (u32*) m_Data[data_type];
+    u32* tbl = (u32*) m_Data[data_type]; XMESCHK(tbl, m_language, data_type, NULL)
     MesTblBlock* blk = (MesTblBlock*) ((u8*) tbl + tbl[m_language + 1]);
 
     if (no > (int) blk->count - 1) {
@@ -253,7 +253,7 @@ u16* MessageData::getAddr(int no, int data_type)
 // Number of messages in file `type` for the current language.
 int MessageData::getMesNum(int data_type)
 {
-    u32* tbl = (u32*) m_Data[data_type];
+    u32* tbl = (u32*) m_Data[data_type]; XMESCHK(tbl, m_language, data_type, 0)
     MesTblBlock* blk = (MesTblBlock*) ((u8*) tbl + tbl[m_language + 1]);
 
     return blk->count;

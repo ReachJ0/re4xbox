@@ -47,10 +47,19 @@ void XSub_Convert(void* data, unsigned len);
 }
 #endif
 #define XSUBDATA(adr, len) XSub_Convert((void*) (adr), (unsigned) (len));
+#ifdef __cplusplus
+extern "C" {
+#endif
+int XMes_Check(const void* tbl, unsigned lang, int type);
+#ifdef __cplusplus
+}
+#endif
+#define XMESCHK(tbl, lang, type, ret) if (!XMes_Check((tbl), (lang), (type))) return ret;
 #else
 #define SPIN_VSYNC(cond) while (cond) {}
 #define XFRM_DECL
 #define XSUBDATA(adr, len)
+#define XMESCHK(tbl, lang, type, ret)
 #define XMARK(n)
 #define XCARD_TRACE(a, b, c, d)
 #define XFRM(txt)
