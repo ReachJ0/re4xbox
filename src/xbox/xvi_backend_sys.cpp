@@ -80,7 +80,7 @@ void XTrace_Mark(int n)
     s_cnt[n & 31]++;
 }
 
-extern "C" void XOs_ThreadDbg(int*, unsigned*, int*, int*, int*);
+extern "C" void XOs_ThreadDbg(int*, unsigned*, int*, int*, int*, int*);
 
 void XTrace_Beat(int frame)
 {
@@ -93,10 +93,10 @@ void XTrace_Beat(int frame)
              s_dbgBlits);
     XTrace_Add(t);
     {
-        int rs, hint, prio, state;
+        int rs, hint, prio, state, ctxOk;
         unsigned bits;
-        XOs_ThreadDbg(&rs, &bits, &hint, &prio, &state);
-        snprintf(t, sizeof(t), "os resched%d bits%08x hint%d prio%d state%d\n", rs, bits, hint, prio, state);
+        XOs_ThreadDbg(&rs, &bits, &hint, &prio, &state, &ctxOk);
+        snprintf(t, sizeof(t), "os resched%d bits%08x hint%d prio%d state%d ctx%d\n", rs, bits, hint, prio, state, ctxOk);
         XTrace_Add(t);
     }
     snprintf(t, sizeof(t), "marks %08x\n", s_marks);

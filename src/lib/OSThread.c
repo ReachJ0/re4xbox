@@ -400,13 +400,14 @@ static OSThread* SelectThread(int yield) {
 #ifdef RE4_XBOX
 // Development: the scheduler state the heartbeat prints (a woken task that does not preempt is either blocked by
 // Reschedule > 0 or has no better priority than the running thread).
-void XOs_ThreadDbg(int* resched, unsigned* bits, int* hint, int* curPrio, int* curState) {
+void XOs_ThreadDbg(int* resched, unsigned* bits, int* hint, int* curPrio, int* curState, int* ctxOk) {
     OSThread* t = OSGetCurrentThread();
     *resched = Reschedule;
     *bits = RunQueueBits;
     *hint = RunQueueHint;
     *curPrio = t ? t->priority : -1;
     *curState = t ? t->state : -1;
+    *ctxOk = t ? (OSGetCurrentContext() == &t->context) : -1;
 }
 #endif
 
