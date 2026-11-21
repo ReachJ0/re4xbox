@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "xbox/xtrace.h"
+#include "xbox/xgp.h"
 #include "xbox/xraster.h"
 #include <xboxkrnl/xboxkrnl.h>
 
@@ -56,6 +57,15 @@ static void Lock(void)
 static void Unlock(void) { InterlockedExchange(&s_lock, 0); }
 
 static volatile LONG s_traceSeq;   // bumped by every XTrace_Add: the watchdog redraws when it changes
+
+void XTrace_Beat(int frame)
+{
+    const XGpState* st = XGp_State();
+    char t[96];
+    snprintf(t, sizeof(t), "beat %d d%u v%u t%u c%u p%u\n", frame, (unsigned) st->draws, (unsigned) st->verts,
+             (unsigned) XRaster_Triangles(), XRaster_CopySerial(), XGp_Pending());
+    XTrace_Add(t);
+}
 
 void XTrace_Val(const char* label, int a, int b)
 {

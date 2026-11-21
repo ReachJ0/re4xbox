@@ -15,6 +15,9 @@ void XTrace_Add(const char* text);
 // "label a b" as one line (development counters).
 void XTrace_Val(const char* label, int a, int b);
 
+// Development heartbeat (main.cpp): frame number plus what the GX processor / rasterizer have done so far.
+void XTrace_Beat(int frame);
+
 // A breadcrumb: kept in a separate small ring that is never drawn on the frame. Only the hang watchdog shows it
 // (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
 void XTrace_Crumb(const char* text);
@@ -43,7 +46,7 @@ void XTrace_HaltForever(void);
 // Per-frame breadcrumbs of the first 4 frames of the main loop (main.cpp). Written inline so no line numbers move.
 #define XFRM_DECL int xFrame = 0;
 #define XFRM(txt) if (xFrame < 4) { XTrace_Add("fr " #txt "\n"); }
-#define XFRM_END xFrame++; if (xFrame % 120 == 0) { XTrace_Val("fr beat", xFrame, 0); }
+#define XFRM_END xFrame++; if (xFrame % 60 == 0) { XTrace_Beat(xFrame); }
 #define XFRMV(txt, a, b) if (xFrame < 4) { XTrace_Val("fr " #txt, (int) (a), (int) (b)); }
 #else
 #define RE4_TRACE(s)
