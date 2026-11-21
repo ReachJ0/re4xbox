@@ -117,6 +117,11 @@ extern "C" int XMes_Check(const void* tbl, unsigned lang, int type)
                  (addr >= 0x10000 && addr < 0x40000000) ? t[0] : 0, (addr >= 0x10000 && addr < 0x40000000) ? t[1] : 0,
                  (addr >= 0x10000 && addr < 0x40000000) ? t[2] : 0, (addr >= 0x10000 && addr < 0x40000000) ? t[3] : 0);
         XTrace_Add(s_mesChk);
+        static char d[96];
+        snprintf(d, sizeof(d), "mesdiag e%u len%x %x %x %x %x\n", XMes_Diag[0], XMes_Diag[1], XMes_Diag[2], XMes_Diag[3],
+                 XMes_Diag[4], XMes_Diag[5]);
+        XTrace_Add(d);
+        XTrace_Add(s_subInfo[0] ? s_subInfo : "sub: not run\n");
     }
     return 0;
 }
