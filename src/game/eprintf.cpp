@@ -11,6 +11,10 @@
 #include "va_ppc.h"
 #include "eprintf.h"
 #include <stdio.h>
+#ifdef RE4_XBOX
+#include "xbox/xtex_endian.h"
+#include "xbox/xtrace.h"
+#endif
 #include <dolphin/os.h>
 #include "main.h"
 #include "db_log.h"
@@ -148,6 +152,11 @@ int Sp_char_ck(int c)
 void EprintfBufferClear()
 {
     int i;
+#ifdef RE4_XBOX
+    if (!eprintf_init) {
+        return;  // etc/moji8.tpl not on the disc: the message buffers were never allocated
+    }
+#endif
     for (i = 0; i < MESS_PTR_NUM; i++) {
         *(u32*) (mess_ptr_buff + i * 4) = 0;
     }
@@ -328,7 +337,16 @@ void EprintfInit()
     TEXHeader* img;
 #line 832 "D:/Bio4/Prog/eprintf.cpp"
     req = DvdReadN(name, NULL, 0, 0, 0, 3, __FILE__, __LINE__);
+#ifdef RE4_XBOX
+    int tplLen = 0;
+    if (Dvd.ReadCheck(req, &tplLen, NULL, &addr) >= 0) {
+        if (!XTex_SwapTpl(addr, tplLen)) {
+            XTrace_Add("eprintf: moji8.tpl not converted\n");
+            return;
+        }
+#else
     if (Dvd.ReadCheck(req, NULL, NULL, &addr) >= 0) {
+#endif
         img = (TEXHeader*) ((u8*) addr + 0x14);
         GXInitTexObj(&fontTexObj, (void*) ((u32) img->data + (u32) addr), img->width, img->height, img->format, img->wrapS,
                      img->wrapT, 0);
