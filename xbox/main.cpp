@@ -6,6 +6,8 @@
 
 #include <dolphin/os.h>
 #include "xbox/xtrace.h"
+#include "xbox/xgp.h"
+#include "xbox/xraster.h"
 
 #undef main
 extern "C++" int re4_main();
@@ -23,6 +25,8 @@ int main(void)
     { char b[80]; snprintf(b, sizeof(b), "OSInit ok, arena %p .. %p\n", OSGetArenaLo(), OSGetArenaHi()); XTrace_Add(b); }
 #ifdef RE4_RUN_GAME
     XCrash_Install();
+    XRaster_Init();                         // software GX drawing: primitives go to the EFB, GXCopyDisp fills the XFB
+    XGp_SetBackend(XRaster_Backend());
     XTrace_Add("calling re4_main\n");
     re4_main();
     XTrace_Add("re4_main returned\n");   // make RE4_RUN_GAME=1 (see docs/xbox.md): runs the game; not verified to boot

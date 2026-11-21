@@ -245,6 +245,51 @@ static void TestLinesPoints()
     CHECK(Px(200, 200) == 0xFFFF00FFu);
 }
 
+static void TestCopyDisp(unsigned char* blk)
+{
+    unsigned char* xfb = blk + 0x200000;
+    Frame();
+    Ortho(0.1f, 10); Ident(); Fmt();
+    Tri(0, 0, 0, 480, 640, 0, -1, 255, 0, 0);                 // red upper left half
+    Tri(640, 480, 640, 0, 0, 480, -1, 0, 0, 255);             // blue lower right half
+    unsigned before = XRaster_CopySerial();
+    GXSetDispCopySrc(0, 0, 640, 480);
+    GXSetDispCopyDst(640, 480);
+    GXSetCopyClear((GXColor){0, 255, 0, 255}, 0x00FFFFFF);
+    GXCopyDisp(xfb, GX_TRUE);
+    GXFlush();
+    CHECK(XGp_Pending() == 0);
+    CHECK(XRaster_CopySerial() == before + 1);
+    // pixel (100,50): red -> Y U Y V bytes at row 50, x pair 50
+    const unsigned char* a = xfb + 50 * 1280 + 50 * 4;
+    CHECK(Near(a[0], 82, 3) && Near(a[2], 82, 3) && Near(a[1], 90, 3) && Near(a[3], 240, 3));
+    // pixel (500,400): blue
+    const unsigned char* b = xfb + 400 * 1280 + 250 * 4;
+    CHECK(Near(b[0], 41, 3) && Near(b[1], 240, 3) && Near(b[3], 110, 3));
+    // the copy cleared the EFB to the clear colour (green) after copying
+    CHECK(Px(100, 50) == 0xFF00FF00u && Px(500, 400) == 0xFF00FF00u && XRaster_Depth()[50 * XRASTER_W + 100] == 16777215.0f);
+    // vertical scale 1.5: 320 source lines become 480 lines; line 3 of the copy comes from source line 2
+    Frame();
+    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+    V(0, 0, -1, 255, 255, 255); V(0, 160, -1, 255, 255, 255); V(640, 160, -1, 255, 255, 255); V(640, 0, -1, 255, 255, 255);
+    GXEnd();
+    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+    V(0, 160, -1, 0, 0, 0); V(0, 320, -1, 0, 0, 0); V(640, 320, -1, 0, 0, 0); V(640, 160, -1, 0, 0, 0);
+    GXEnd();
+    GXFlush();
+    memset(xfb, 0, 1280 * 490);
+    GXSetDispCopySrc(0, 0, 640, 320);
+    GXSetDispCopyDst(640, 480);
+    GXSetDispCopyYScale(1.5f);
+    GXCopyDisp(xfb, GX_FALSE);
+    GXFlush();
+    CHECK(Near(xfb[200 * 1280], 235, 3));                    // line 200 -> source line 133: still white
+    CHECK(Near(xfb[260 * 1280], 16, 3));                     // line 260 -> source line 173: black
+    CHECK(xfb[480 * 1280] != 0 && xfb[481 * 1280] == 0);     // 481 lines (what GXSetDispCopyYScale reports for 320 lines at 1.5)
+    CHECK(Px(10, 10) == 0xFFFFFFFFu);                        // no clear this time
+    GXSetDispCopyYScale(1.0f);
+}
+
 int main()
 {
     void* want = (void*) (uintptr_t) XMEM_WANTED_BASE;
@@ -261,6 +306,7 @@ int main()
     TestBlendScissor();
     TestPerspectiveAndClip();
     TestLinesPoints();
+    TestCopyDisp((unsigned char*) blk);
     printf("raster: %d checks, %d failures, %llu triangles\n", g_checks, g_fails, XRaster_Triangles());
     return g_fails != 0;
 }

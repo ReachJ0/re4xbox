@@ -290,7 +290,81 @@ void Draw(int prim, int, const XGpVertex* v, int count, const XGpState* st, void
     free(t);
 }
 
-XGpBackend g_be = {Draw, 0, 0, 0, 0};
+unsigned g_copySerial;
+
+inline void Yuv(unsigned argb, int* y, int* u, int* v)
+{
+    int r = (argb >> 16) & 255, g = (argb >> 8) & 255, b = argb & 255;
+    *y = (66 * r + 129 * g + 25 * b + 128) / 256 + 16;
+    *u = (-38 * r - 74 * g + 112 * b + 128) / 256 + 128;
+    *v = (112 * r - 94 * g - 18 * b + 128) / 256 + 128;
+}
+
+// BP 0x52 (copy command): bit 14 = copy to an XFB (else a texture, not done yet), bit 11 = clear the EFB afterwards,
+// bit 10 = vertical scale (BP 0x4E). The XFB is YUV422 as the video encoder reads it: Y0 U Y1 V per pixel pair.
+void CopyCmd(unsigned cmd, const XGpState* st)
+{
+    if (!g_pix) return;
+    if ((cmd >> 14) & 1) {
+        unsigned memSize = 0;
+        unsigned char* mem = XGp_MemoryBase(&memSize);
+        unsigned src = st->bp[0x49], size = st->bp[0x4A];
+        int x0 = (int) (src & 0x3FF), y0 = (int) ((src >> 10) & 0x3FF);
+        int w = (int) (size & 0x3FF) + 1, h = (int) ((size >> 10) & 0x3FF) + 1;
+        unsigned stride = (st->bp[0x4D] & 0x3FF) * 32u;
+        unsigned dst = (st->bp[0x4B] & 0x1FFFFF) << 5;
+        unsigned sc = st->bp[0x4E] & 0x1FF;
+        int rows = h;
+        if (((cmd >> 10) & 1) && sc) {  // the line count the SDK computes for this scale (__GXGetNumXfbLines)
+            unsigned d = sc, n = ((unsigned) h - 1) * 0x100 / sc + 1;
+            if (d > 0x80 && d < 0x100) {
+                while (d % 2 == 0) d /= 2;
+                if ((unsigned) h % d == 0) n++;
+            }
+            rows = (int) (n > 0x400 ? 0x400 : n);
+        }
+        if (mem && stride && x0 + w <= XRASTER_W && y0 + h <= XRASTER_H &&
+            (unsigned long long) dst + (unsigned long long) rows * stride <= memSize && stride >= (unsigned) w * 2) {
+            for (int r = 0; r < rows; r++) {
+                int sy = y0 + (((cmd >> 10) & 1) && sc ? (int) ((unsigned) r * sc / 256u) : r);
+                const unsigned* line = g_pix + sy * XRASTER_W + x0;
+                unsigned char* o = mem + dst + (unsigned long long) r * stride;
+                for (int x = 0; x < w; x += 2) {
+                    int y1, u1, v1, y2, u2, v2;
+                    Yuv(line[x], &y1, &u1, &v1);
+                    Yuv(line[x + 1 < w ? x + 1 : x], &y2, &u2, &v2);
+                    o[0] = (unsigned char) y1;
+                    o[1] = (unsigned char) ((u1 + u2) / 2);
+                    o[2] = (unsigned char) y2;
+                    o[3] = (unsigned char) ((v1 + v2) / 2);
+                    o += 4;
+                }
+            }
+            g_copySerial++;
+        }
+    }
+    if ((cmd >> 11) & 1) {
+        unsigned c0 = st->bp[0x4F], c1 = st->bp[0x50], z = st->bp[0x51] & 0xFFFFFF;
+        unsigned argb = ((c0 >> 8) & 255) << 24 | (c0 & 255) << 16 | ((c1 >> 8) & 255) << 8 | (c1 & 255);
+        // the SDK widens the colour / depth masks of the clear through BP 0x40 / 0x41 first; honour them
+        bool clrColor = (st->bp[0x41] >> 3) & 1, clrAlpha = (st->bp[0x41] >> 4) & 1, clrZ = (st->bp[0x40] >> 4) & 1;
+        for (int i = 0; i < XRASTER_W * XRASTER_H; i++) {
+            unsigned o = g_pix[i];
+            unsigned n = argb;
+            if (!clrColor) n = (n & 0xFF000000u) | (o & 0x00FFFFFFu);
+            if (!clrAlpha) n = (n & 0x00FFFFFFu) | (o & 0xFF000000u);
+            g_pix[i] = n;
+            if (clrZ) g_z[i] = (float) z;
+        }
+    }
+}
+
+void OnBp(int reg, unsigned val, const XGpState* st, void*)
+{
+    if (reg == 0x52) CopyCmd(val, st);
+}
+
+XGpBackend g_be = {Draw, OnBp, 0, 0, 0};
 
 }  // namespace
 
@@ -315,6 +389,7 @@ extern "C" void XRaster_Clear(unsigned argb, float z24)
     }
 }
 
+extern "C" unsigned XRaster_CopySerial(void) { return g_copySerial; }
 extern "C" const unsigned* XRaster_Pixels(void) { return g_pix; }
 extern "C" const float* XRaster_Depth(void) { return g_z; }
 extern "C" unsigned long long XRaster_Triangles(void) { return g_tris; }

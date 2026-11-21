@@ -65,6 +65,7 @@ unsigned XGp_Pending(void);                        // bytes of an incomplete com
 // memory the GP reads vertex arrays / display lists from: physical address (offset) -> pointer. Vertex data in
 // memory is read BIG-endian (the game assets keep their GameCube byte order).
 void XGp_SetMemory(unsigned char* base, unsigned size);
+unsigned char* XGp_MemoryBase(unsigned* size);     // the window set above (null before XGx_Init); backends copy the EFB into it
 unsigned XGp_VertexSize(int vat);                  // size in bytes of one direct vertex for the current VCD/VAT
 
 // hardware register window (CP/PE/PI/MEM at physical 0x0C000000..0x0C009000)

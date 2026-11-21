@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "xbox/xtrace.h"
+#include "xbox/xraster.h"
 #include <xboxkrnl/xboxkrnl.h>
 
 extern "C" {
@@ -194,9 +195,54 @@ static void DrawFrame(const void* fb, int black, const char* status)
     XTrace_Crumb("DF done");
 }
 
-void XViBackend_Present(const void* fb, int black, int, int)
+#ifdef RE4_DEBUGSCREEN
+// With the text screen (no pbkit) the XFB (YUV422, as GXCopyDisp wrote it) is converted straight into the frame buffer
+// of nxdk's video mode (32 or 16 bit), centred, whenever a new copy happened. Debug text printed afterwards stays on top.
+static void BlitXfb(const unsigned char* xfb, int w, int h)
+{
+    VIDEO_MODE vm = XVideoGetMode();
+    unsigned char* dst = XVideoGetFB();
+    int bytes = (vm.bpp + 7) / 8;
+    if (!dst || !xfb || (bytes != 4 && bytes != 2) || w <= 0 || h <= 0) return;
+    int ox = (vm.width - w) / 2, oy = (vm.height - h) / 2;
+    for (int y = 0; y < h; y++) {
+        int dy = y + oy;
+        if (dy < 0 || dy >= vm.height) continue;
+        const unsigned char* s = xfb + y * w * 2;
+        for (int x = 0; x < w; x += 2, s += 4) {
+            int c = 298 * (s[0] - 16), d = s[1] - 128, e = s[3] - 128;
+            for (int k = 0; k < 2; k++) {
+                int yy = k ? 298 * (s[2] - 16) : c;
+                int r = (yy + 409 * e + 128) >> 8, g = (yy - 100 * d - 208 * e + 128) >> 8, b = (yy + 516 * d + 128) >> 8;
+                int dx = x + k + ox;
+                if (dx < 0 || dx >= vm.width) continue;
+                r = r < 0 ? 0 : r > 255 ? 255 : r;
+                g = g < 0 ? 0 : g > 255 ? 255 : g;
+                b = b < 0 ? 0 : b > 255 ? 255 : b;
+                unsigned char* p = dst + ((size_t) dy * vm.width + dx) * bytes;
+                if (bytes == 4) *(unsigned*) p = 0xFF000000u | (unsigned) (r << 16 | g << 8 | b);
+                else *(unsigned short*) p = (unsigned short) (((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+            }
+        }
+    }
+}
+#endif
+
+void XViBackend_Present(const void* fb, int black, int w, int h)
 {
     char status[96];
+#ifdef RE4_DEBUGSCREEN
+    static unsigned s_shownSerial = 0xFFFFFFFFu;
+    static const void* s_shownFb;
+    if (!black && fb && (XRaster_CopySerial() != s_shownSerial || fb != s_shownFb)) {
+        s_shownSerial = XRaster_CopySerial();
+        s_shownFb = fb;
+        if (XRaster_CopySerial()) BlitXfb((const unsigned char*) fb, w, h);
+    }
+#else
+    (void) w;
+    (void) h;
+#endif
     EnsurePb();
     if (s_state < 0) {
         return;

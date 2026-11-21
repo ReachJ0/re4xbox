@@ -52,6 +52,11 @@ extern "C" void XGp_SetBackend(const XGpBackend* b)
 extern "C" void XGp_SetIrqSink(void (*sink)(int)) { g_irq = sink; }
 extern "C" const XGpState* XGp_State(void) { return &g_st; }
 extern "C" void XGp_SetMemory(unsigned char* base, unsigned size) { g_mem = base; g_memSize = size; }
+extern "C" unsigned char* XGp_MemoryBase(unsigned* size)
+{
+    if (size) *size = g_memSize;
+    return g_mem;
+}
 
 extern "C" void XGp_Init(void)
 {
