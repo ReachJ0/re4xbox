@@ -29,7 +29,9 @@ static int SafePtr(const void* p, unsigned n)
     if (top < a) return 0;
     if (a >= 0x00010000u && top <= 0x04000000u) return 1;  // low mirror: xbe, heap, stack
     // not the 0x80000000 / 0xC0000000 mirrors: xemu showed pages there that are not mapped (a read faulted)
-    if (g_stkHi && a >= g_stkLo && top <= g_stkHi) return 1;  // this thread's stack (0xD0000000 range)
+    if (g_stkHi && a >= g_stkLo && top <= g_stkHi) {  // this thread's stack (0xD0000000 range): only mapped pages
+        return MmIsAddressValid((PVOID) a) && MmIsAddressValid((PVOID) (top - 1));
+    }
     return 0;
 }
 
