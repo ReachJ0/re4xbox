@@ -16,6 +16,7 @@
 #include <string.h>
 #include "xbox/xtrace.h"
 #include "xbox/xgp.h"
+#include "xbox/xmes_endian.h"
 #include "xbox/xraster.h"
 #include <xboxkrnl/xboxkrnl.h>
 
@@ -80,6 +81,25 @@ void XTrace_Mark(int n)
     s_cnt[n & 31]++;
 }
 
+#include "xbox/xarc_endian.h"
+#include "xbox/xswap.h"
+
+// What the sub screen data looked like when it was converted (shown by the heartbeat).
+static char s_subInfo[160];
+
+extern "C" void XSub_Convert(void* data, unsigned len)
+{
+    const unsigned char* d = (const unsigned char*) data;
+    unsigned o0 = len >= 20 ? XSwap_Rd32(d + 16) : 0, o1 = len >= 24 ? XSwap_Rd32(d + 20) : 0, o2 = len >= 28 ? XSwap_Rd32(d + 24) : 0;
+    unsigned w[4] = {0, 0, 0, 0};
+    if (o1 && o1 + 16 <= len) {
+        for (int i = 0; i < 4; i++) w[i] = XSwap_Rd32(d + o1 + i * 4);
+    }
+    int ok = XArc_SwapCardArc(data, len);
+    snprintf(s_subInfo, sizeof(s_subInfo), "sub ok%d len%x o%x/%x/%x m%x %x %x %x\n", ok, len, o0, o1, o2, w[0], w[1], w[2], w[3]);
+    XTrace_Add(s_subInfo);
+}
+
 extern "C" void XOs_ThreadDbg(int*, unsigned*, int*, int*, int*, int*);
 
 void XTrace_Beat(int frame)
@@ -97,6 +117,12 @@ void XTrace_Beat(int frame)
         unsigned bits;
         XOs_ThreadDbg(&rs, &bits, &hint, &prio, &state, &ctxOk);
         snprintf(t, sizeof(t), "os resched%d bits%08x hint%d prio%d state%d ctx%d\n", rs, bits, hint, prio, state, ctxOk);
+        XTrace_Add(t);
+    }
+    XTrace_Add(s_subInfo[0] ? s_subInfo : "sub: not run\n");
+    if (XMes_Diag[0]) {
+        snprintf(t, sizeof(t), "mes err%u len%x %x %x %x %x\n", XMes_Diag[0], XMes_Diag[1], XMes_Diag[2], XMes_Diag[3],
+                 XMes_Diag[4], XMes_Diag[5]);
         XTrace_Add(t);
     }
     snprintf(t, sizeof(t), "marks %08x\n", s_marks);

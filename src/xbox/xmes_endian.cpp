@@ -5,7 +5,23 @@
 
 #define MES_MAX_BLOCKS 16
 
+// The first rejected file: { reason, length, first four words as stored (big-endian read as such) }, for the heartbeat.
+extern "C" unsigned XMes_Diag[6];
+unsigned XMes_Diag[6];
+
 namespace {
+
+void Reject(const unsigned char* d, unsigned len, unsigned why)
+{
+    if (XMes_Diag[0]) {
+        return;   // keep the first failure
+    }
+    XMes_Diag[0] = why;
+    XMes_Diag[1] = len;
+    for (int i = 0; i < 4; i++) {
+        XMes_Diag[2 + i] = (unsigned) (i * 4 + 4 <= (int) len ? XSwap_Rd32(d + i * 4) : 0xFFFFFFFFu);
+    }
+}
 
 struct Block {
     unsigned off, end;
@@ -17,14 +33,17 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
 {
     *nb = 0;
     if (len < 8) {
+        Reject(d, len, 1);
         return 0;
     }
     unsigned first = XSwap_Rd32(d + 4);
     if (first % 4 != 0 || first < 8 || first > len) {
+        Reject(d, len, 2);
         return 0;
     }
     unsigned words = first / 4;
     if (words - 1 > MES_MAX_BLOCKS) {
+        Reject(d, len, 3);
         return 0;
     }
     unsigned offs[MES_MAX_BLOCKS];
@@ -32,6 +51,7 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
     for (unsigned i = 1; i < words; i++) {
         unsigned o = XSwap_Rd32(d + i * 4);
         if (o < first || o % 4 != 0 || o + 4 > len) {
+            Reject(d, len, 4);
             return 0;
         }
         int dup = 0;
@@ -53,6 +73,7 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
         b[i].end = end;
         unsigned cnt = XSwap_Rd32(d + offs[i]);
         if (cnt > (end - offs[i]) / 4 - 1) {   // count + ofs[count] must fit in the block
+            Reject(d, len, 5);
             return 0;
         }
     }

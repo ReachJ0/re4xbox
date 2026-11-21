@@ -38,9 +38,15 @@ void VIWaitForRetrace(void);
 #endif
 #define SPIN_VSYNC(cond) while (cond) { VIWaitForRetrace(); }
 #include "xbox/xtrace.h"   // development traces (XFRM*, XCARD_TRACE, RE4_TRACE)
-#include "xbox/xarc_endian.h"
-// sub screen data (SndMem.sub_adr): big-endian offset table + icon TPL, converted after it is read
-#define XSUBDATA(adr, len) if (!XArc_SwapCardArc((void*) (adr), (unsigned) (len))) { XTrace_Add("sub data: not converted\n"); }
+// sub screen data (SndMem.sub_adr): big-endian offset table + icon TPL + messages, converted after it is read
+#ifdef __cplusplus
+extern "C" {
+#endif
+void XSub_Convert(void* data, unsigned len);
+#ifdef __cplusplus
+}
+#endif
+#define XSUBDATA(adr, len) XSub_Convert((void*) (adr), (unsigned) (len));
 #else
 #define SPIN_VSYNC(cond) while (cond) {}
 #define XFRM_DECL
