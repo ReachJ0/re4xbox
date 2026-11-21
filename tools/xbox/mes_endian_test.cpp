@@ -40,13 +40,16 @@ int main()
         unsigned char* g = (unsigned char*) malloc(len ? len : 1);
         memcpy(g, orig, len);
         int r = XMes_Swap(g, len);
-        CHECK(r == 0 || r == 2);
+        CHECK(r >= 0 && r <= 2);
         free(g);
     }
     unsigned char bad[64]; memset(bad, 0xFF, sizeof bad);
     CHECK(XMes_Swap(bad, sizeof bad) == 0 && bad[0] == 0xFF);
     unsigned char big[64]; memcpy(big, orig, n); P32(big + 0x10, 0x7FFFFFFF);   // count that does not fit
-    CHECK(XMes_Swap(big, n) == 0 && big[0x10] == 0x7F);
+    CHECK(XMes_Swap(big, n) == 1 && big[0x10] == 0x7F && big[0x13] == 0xFF);   // junk block left alone, the other converted
+    CHECK(*(uint32_t*) (big + 0x30) == 1 && *(uint32_t*) (big + 4) == 0x10 && *(uint16_t*) (big + 0x38) == 0x5678);
+    unsigned char both[64]; memcpy(both, orig, n); P32(both + 0x10, 0x7FFFFFFF); P32(both + 0x30, 0x7FFFFFFF);
+    CHECK(XMes_Swap(both, n) == 0 && both[0] == 0);   // no valid block: nothing touched
     unsigned char lowOff[0x40]; memcpy(lowOff, orig, n); P32(lowOff + 8, 0x4);  // offset inside the table
     CHECK(XMes_Swap(lowOff, n) == 0);
     for (int i = 0; i < 20000; i++) {   // random garbage never reads past the buffer (ASan)

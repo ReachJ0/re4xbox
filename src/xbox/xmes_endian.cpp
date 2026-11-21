@@ -62,6 +62,7 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
             offs[n++] = o;
         }
     }
+    int valid = 0;
     for (int i = 0; i < n; i++) {     // end of a block = the next larger offset, or the end of the file
         unsigned end = len;
         for (int k = 0; k < n; k++) {
@@ -69,21 +70,25 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
                 end = offs[k];
             }
         }
-        b[i].off = offs[i];
-        b[i].end = end;
         unsigned cnt = XSwap_Rd32(d + offs[i]);
         if (cnt > (end - offs[i]) / 4 - 1) {   // count + ofs[count] must fit in the block
+            // Not a message block (the disc keeps unused/other-format data in some language slots): leave it as it is
+            // and convert the rest; the diagnostic keeps the first one: offset, end, count, index.
             unsigned was = XMes_Diag[0];
             Reject(d, len, 5);
-            if (was == 0) {   // for this reason the words say which block failed: offset, end, count, index
+            if (was == 0) {
                 XMes_Diag[2] = offs[i];
                 XMes_Diag[3] = end;
                 XMes_Diag[4] = cnt;
                 XMes_Diag[5] = (unsigned) i;
             }
-            return 0;
+            continue;
         }
+        b[valid].off = offs[i];
+        b[valid].end = end;
+        valid++;
     }
+    n = valid;
     *nb = n;
     return words;
 }
