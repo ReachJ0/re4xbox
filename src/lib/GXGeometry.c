@@ -116,7 +116,11 @@ void GXSetCullMode(GXCullMode mode) {
     }
 #else
     hwMode = (mode >> 1) & 1;
+#ifdef RE4_XBOX
+    hwMode = (GXCullMode) __rlwimi(hwMode, mode, 1, 30, 30);  // the Xbox helper returns the result (CW's builtin edits hwMode)
+#else
     __rlwimi(hwMode, mode, 1, 30, 30);
+#endif
 #endif
 
     SET_REG_FIELD(570, __GXData->genMode, 2, 14, hwMode);

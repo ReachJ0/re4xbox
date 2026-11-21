@@ -1,0 +1,266 @@
+// Host test of the software rasterizer (src/xbox/xraster.cpp): the SDK's GX code writes real command streams, the
+// processor decodes them, the rasterizer draws into the EFB and the test inspects pixels. RASTER_DUMP=dir writes PPMs.
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <dolphin/mtx.h>
+#include <dolphin/gx.h>
+#include <dolphin/os.h>
+#include <xbox/xgp.h>
+#include <xbox/xmem.h>
+#include <xbox/xraster.h>
+
+static int g_checks, g_fails;
+#define CHECK(c) do { g_checks++; if (!(c)) { g_fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
+
+static unsigned Px(int x, int y) { return XRaster_Pixels()[y * XRASTER_W + x]; }
+static int R(unsigned p) { return (p >> 16) & 255; }
+static int G(unsigned p) { return (p >> 8) & 255; }
+static int B(unsigned p) { return p & 255; }
+static int Near(int a, int b, int tol) { return abs(a - b) <= tol; }
+
+static void Dump(const char* name)
+{
+    const char* dir = getenv("RASTER_DUMP");
+    char path[512];
+    if (!dir) return;
+    snprintf(path, sizeof(path), "%s/%s.ppm", dir, name);
+    FILE* f = fopen(path, "wb");
+    if (!f) return;
+    fprintf(f, "P6\n%d 480\n255\n", XRASTER_W);
+    for (int y = 0; y < 480; y++)
+        for (int x = 0; x < XRASTER_W; x++) {
+            unsigned p = Px(x, y);
+            fputc(R(p), f); fputc(G(p), f); fputc(B(p), f);
+        }
+    fclose(f);
+}
+
+static void Ortho(float n, float f)   // eye x,y = screen pixels (y down), z in -n..-f
+{
+    Mtx44 m;
+    memset(m, 0, sizeof(m));
+    m[0][0] = 2.0f / 640; m[0][3] = -1.0f;
+    m[1][1] = -2.0f / 480; m[1][3] = 1.0f;
+    m[2][2] = -1.0f / (f - n); m[2][3] = -f / (f - n);
+    m[3][3] = 1.0f;
+    GXSetProjection(m, GX_ORTHOGRAPHIC);
+}
+
+static void Persp(float n, float f)
+{
+    Mtx44 m;
+    memset(m, 0, sizeof(m));
+    m[0][0] = 1.0f * 480 / 640; m[1][1] = 1.0f;
+    m[2][2] = -n / (f - n); m[2][3] = -f * n / (f - n);
+    m[3][2] = -1.0f;
+    GXSetProjection(m, GX_PERSPECTIVE);
+}
+
+static void Ident()
+{
+    Mtx m;
+    memset(m, 0, sizeof(m));
+    m[0][0] = m[1][1] = m[2][2] = 1.0f;
+    GXLoadPosMtxImm(m, GX_PNMTX0);
+    GXSetCurrentMtx(GX_PNMTX0);
+}
+
+static void Fmt()
+{
+    GXClearVtxDesc();
+    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+}
+
+static void V(float x, float y, float z, int r, int g, int b, int a = 255)
+{
+    GXPosition3f32(x, y, z);
+    GXColor4u8(r, g, b, a);
+}
+
+static void Tri(float x0, float y0, float x1, float y1, float x2, float y2, float z, int r, int g, int b, int a = 255)
+{
+    GXBegin(GX_TRIANGLES, GX_VTXFMT0, 3);
+    V(x0, y0, z, r, g, b, a); V(x1, y1, z, r, g, b, a); V(x2, y2, z, r, g, b, a);
+    GXEnd();
+    GXFlush();
+}
+
+static void Frame(int zEnable = 0, GXCompare fn = GX_ALWAYS)
+{
+    XRaster_Clear(0xFF000000u, 16777215.0f);
+    GXSetViewport(0, 0, 640, 480, 0, 1);
+    GXSetScissor(0, 0, 640, 480);
+    GXSetCullMode(GX_CULL_NONE);
+    GXSetZMode(zEnable, fn, 1);
+    GXSetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    GXFlush();
+}
+
+static void TestGouraud()
+{
+    Frame();
+    Ortho(0.1f, 10); Ident(); Fmt();
+    GXBegin(GX_TRIANGLES, GX_VTXFMT0, 3);
+    V(100, 100, -1, 255, 0, 0); V(300, 100, -1, 0, 255, 0); V(100, 300, -1, 0, 0, 255);
+    GXEnd(); GXFlush();
+    CHECK(XGp_Pending() == 0);
+    CHECK(R(Px(110, 110)) > 200 && G(Px(110, 110)) < 40 && B(Px(110, 110)) < 40);       // near the red corner
+    CHECK(G(Px(290, 102)) > 200 && R(Px(290, 102)) < 40);                                 // near the green corner
+    CHECK(B(Px(102, 290)) > 200 && R(Px(102, 290)) < 40);                                 // near the blue corner
+    CHECK(Near(R(Px(166, 166)), 85, 25) && Near(G(Px(166, 166)), 85, 25) && Near(B(Px(166, 166)), 85, 25));  // centroid
+    CHECK(Px(400, 400) == 0xFF000000u && Px(250, 250) == 0xFF000000u && Px(99, 99) == 0xFF000000u);          // outside
+    Dump("gouraud");
+}
+
+static void TestQuadStripFan()
+{
+    Frame();
+    Ortho(0.1f, 10); Ident(); Fmt();
+    GXBegin(GX_QUADS, GX_VTXFMT0, 4);       // counter-clockwise on screen
+    V(50, 50, -1, 200, 0, 0); V(50, 150, -1, 200, 0, 0); V(150, 150, -1, 200, 0, 0); V(150, 50, -1, 200, 0, 0);
+    GXEnd();
+    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    V(200, 50, -1, 0, 200, 0); V(200, 150, -1, 0, 200, 0); V(300, 50, -1, 0, 200, 0); V(300, 150, -1, 0, 200, 0);
+    GXEnd();
+    GXBegin(GX_TRIANGLEFAN, GX_VTXFMT0, 4);
+    V(400, 100, -1, 0, 0, 200); V(350, 50, -1, 0, 0, 200); V(350, 150, -1, 0, 0, 200); V(450, 150, -1, 0, 0, 200);
+    GXEnd();
+    GXFlush();
+    CHECK(R(Px(100, 100)) == 200 && R(Px(60, 140)) == 200 && R(Px(140, 60)) == 200);   // both quad triangles
+    CHECK(G(Px(250, 100)) == 200 && G(Px(210, 60)) == 200 && G(Px(290, 140)) == 200);  // both strip triangles
+    CHECK(B(Px(380, 100)) == 200 && B(Px(420, 140)) == 200);                           // fan triangles
+    CHECK(Px(160, 100) == 0xFF000000u && Px(320, 100) == 0xFF000000u);
+    Dump("prims");
+}
+
+static void TestDepth()
+{
+    Frame(1, GX_LESS);
+    Ortho(0.1f, 10); Ident(); Fmt();
+    Tri(100, 100, 100, 300, 300, 300, -2.0f, 0, 255, 0);     // far, drawn first (counter-clockwise on screen)
+    Tri(150, 150, 150, 350, 350, 350, -1.0f, 255, 0, 0);     // near, drawn second
+    Tri(120, 80, 120, 240, 280, 240, -3.0f, 0, 0, 255);      // farther than both, must not overwrite
+    CHECK(R(Px(160, 300)) == 255 && G(Px(160, 300)) == 0);   // near triangle over the far one
+    CHECK(G(Px(110, 200)) == 255 && B(Px(110, 200)) == 0);   // only the far triangle there
+    CHECK(Px(125, 220) != 0xFF0000FF);                       // the farthest lost the depth test
+    // reversed draw order gives the same picture
+    Frame(1, GX_LESS);
+    Tri(150, 150, 150, 350, 350, 350, -1.0f, 255, 0, 0);
+    Tri(100, 100, 100, 300, 300, 300, -2.0f, 0, 255, 0);
+    CHECK(R(Px(160, 300)) == 255 && G(Px(160, 300)) == 0);
+    CHECK(G(Px(110, 200)) == 255);
+    Dump("depth");
+    // z compare off: the later triangle wins whatever its depth
+    Frame(0, GX_ALWAYS);
+    Tri(150, 150, 150, 350, 350, 350, -1.0f, 255, 0, 0);
+    Tri(100, 100, 100, 300, 300, 300, -2.0f, 0, 255, 0);
+    CHECK(G(Px(160, 280)) == 255);
+}
+
+static void TestCull()
+{
+    Frame();
+    Ortho(0.1f, 10); Ident(); Fmt();
+    GXSetCullMode(GX_CULL_BACK);
+    Tri(100, 100, 300, 100, 100, 300, -1, 255, 255, 255);     // clockwise on screen = back face
+    CHECK(Px(150, 150) == 0xFF000000u);
+    Tri(400, 100, 400, 300, 600, 100, -1, 255, 255, 255);     // counter-clockwise = front face
+    CHECK(Px(420, 150) != 0xFF000000u);
+    GXSetCullMode(GX_CULL_FRONT);
+    Tri(100, 350, 300, 350, 100, 450, -1, 0, 255, 255);       // clockwise: now visible
+    CHECK(Px(110, 360) != 0xFF000000u);
+    Tri(400, 350, 400, 450, 500, 350, -1, 255, 255, 0);       // counter-clockwise: culled
+    CHECK(Px(410, 360) == 0xFF000000u);
+    GXSetCullMode(GX_CULL_ALL);
+    Tri(500, 350, 500, 450, 600, 350, -1, 255, 255, 0);
+    CHECK(Px(510, 360) == 0xFF000000u);
+    Dump("cull");
+}
+
+static void TestBlendScissor()
+{
+    Frame();
+    Ortho(0.1f, 10); Ident(); Fmt();
+    Tri(0, 0, 0, 480, 640, 0, -1, 255, 0, 0);                 // red background (upper left half)
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    Tri(50, 50, 50, 250, 250, 50, -1, 0, 0, 255, 128);        // 50% blue over red
+    CHECK(Near(R(Px(80, 80)), 127, 3) && Near(B(Px(80, 80)), 128, 3));
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_COPY);
+    Tri(50, 50, 50, 250, 250, 50, -1, 0, 100, 0);             // additive green
+    CHECK(Near(G(Px(80, 80)), 100, 2) && Near(R(Px(80, 80)), 127, 3));
+    GXSetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    GXSetScissor(300, 200, 100, 100);
+    GXFlush();
+    Tri(250, 150, 250, 450, 550, 150, -1, 255, 255, 255);     // only x 300..399, y 200..299 may change
+    CHECK(Px(350, 250) == 0xFFFFFFFFu);
+    CHECK(Px(299, 250) != 0xFFFFFFFFu && Px(400, 250) != 0xFFFFFFFFu && Px(350, 199) != 0xFFFFFFFFu && Px(350, 300) != 0xFFFFFFFFu);
+    Dump("blend");
+}
+
+static void TestPerspectiveAndClip()
+{
+    Frame(1, GX_LESS);
+    Persp(0.1f, 100);
+    Ident(); Fmt();
+    // a triangle 2 units away, centred: the viewport maps x -1..1 (aspect 480/640 -> width 0.75..) onto the screen
+    Tri(-0.5f, -0.5f, 0.5f, -0.5f, 0.0f, 0.5f, -2.0f, 255, 128, 0);
+    CHECK(Px(320, 290) != 0xFF000000u && Px(320, 200) != 0xFF000000u);   // inside (apex at y 180, base at y 300)
+    CHECK(Px(320, 120) == 0xFF000000u);                       // above the apex
+    CHECK(Px(10, 10) == 0xFF000000u);
+    // a floor triangle running from in front of the camera to behind it must be clipped, not smeared
+    Frame(1, GX_LESS);
+    // (the camera looks down -z; the next triangle starts 2 units ahead and ends 5 units behind it)
+    GXBegin(GX_TRIANGLES, GX_VTXFMT0, 3);
+    V(-1.0f, -1.0f, -2.0f, 255, 255, 255); V(1.0f, -1.0f, -2.0f, 255, 255, 255); V(0.0f, -1.0f, 5.0f, 255, 255, 255);
+    GXEnd(); GXFlush();
+    CHECK(XGp_Pending() == 0);
+    int lit = 0;
+    for (int y = 0; y < 480; y++) for (int x = 0; x < 640; x++) if (Px(x, y) != 0xFF000000u) lit++;
+    CHECK(lit > 0 && lit < 640 * 480);
+    Dump("persp");
+    // everything behind the camera draws nothing
+    Frame(1, GX_LESS);
+    Tri(-1, -1, 1, -1, 0, 1, 2.0f, 255, 255, 255);
+    CHECK(Px(320, 240) == 0xFF000000u && XRaster_Pixels()[0] == 0xFF000000u);
+}
+
+static void TestLinesPoints()
+{
+    Frame();
+    Ortho(0.1f, 10); Ident(); Fmt();
+    GXBegin(GX_LINES, GX_VTXFMT0, 2);
+    V(10, 10, -1, 255, 255, 255); V(110, 10, -1, 255, 255, 255);
+    GXEnd();
+    GXBegin(GX_POINTS, GX_VTXFMT0, 1);
+    V(200, 200, -1, 255, 0, 255);
+    GXEnd(); GXFlush();
+    CHECK(Px(60, 10) == 0xFFFFFFFFu && Px(60, 12) == 0xFF000000u);
+    CHECK(Px(200, 200) == 0xFFFF00FFu);
+}
+
+int main()
+{
+    void* want = (void*) (uintptr_t) XMEM_WANTED_BASE;
+    void* blk = mmap(want, XMEM_SPAN, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE | MAP_32BIT, -1, 0);
+    if (blk == MAP_FAILED) { perror("mmap"); return 2; }
+    CHECK(XMem_SetBase(blk, XMEM_SPAN));
+    GXInit((unsigned char*) blk + 0x100000, 0x20000);
+    XRaster_Init();
+    XGp_SetBackend(XRaster_Backend());
+    TestGouraud();
+    TestQuadStripFan();
+    TestDepth();
+    TestCull();
+    TestBlendScissor();
+    TestPerspectiveAndClip();
+    TestLinesPoints();
+    printf("raster: %d checks, %d failures, %llu triangles\n", g_checks, g_fails, XRaster_Triangles());
+    return g_fails != 0;
+}
