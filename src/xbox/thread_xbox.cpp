@@ -35,6 +35,10 @@
 #include <string.h>
 
 #include "xbox/xthread_backend.h"
+#include "xbox/xtrace.h"
+
+// The host tests do not link the trace; the Xbox build overrides this empty one with the real XTrace_Mark.
+extern "C" __attribute__((weak)) void XTrace_Mark(int) {}
 
 #define MAX_CONTEXTS 64
 
@@ -206,7 +210,9 @@ void OSLoadContext(OSContext* ctx)
         return;
     }
     if (me && !me->dying) {
+        XTrace_Mark(10);
         XThreadBackend_Transfer(to->th);  // parked here until our own context is loaded again
+        XTrace_Mark(11);
         return;
     }
     if (me) {

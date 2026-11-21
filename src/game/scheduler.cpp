@@ -121,7 +121,7 @@ void TaskSchedulerMain(TASK* pT)
             return;
         }
         pT->Status = TASK_RUN;
-        XMARK(6) OSWakeupThread(&pT->Queue);
+        XMARK(6) OSWakeupThread(&pT->Queue); XMARK(12)
         GXSetCurrentGXThread();
         break;
     case TASK_RUN:
