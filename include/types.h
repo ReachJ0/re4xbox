@@ -39,6 +39,9 @@ void VIWaitForRetrace(void);
 #define SPIN_VSYNC(cond) while (cond) { VIWaitForRetrace(); }
 #else
 #define SPIN_VSYNC(cond) while (cond) {}
+#define XFRM_DECL
+#define XFRM(txt)
+#define XFRM_END
 #endif
 
 #ifndef NULL

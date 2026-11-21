@@ -37,6 +37,10 @@ void XTrace_HaltForever(void);
 // A progress line; compiles to nothing outside the Xbox build, so the GameCube code is unchanged.
 #ifdef RE4_XBOX
 #define RE4_TRACE(s) XTrace_Add(s "\n")
+// Per-frame breadcrumbs of the first 4 frames of the main loop (main.cpp). Written inline so no line numbers move.
+#define XFRM_DECL int xFrame = 0;
+#define XFRM(txt) if (xFrame < 4) { XTrace_Add("fr " #txt "\n"); }
+#define XFRM_END xFrame++;
 #else
 #define RE4_TRACE(s)
 #endif

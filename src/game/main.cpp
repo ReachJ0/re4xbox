@@ -162,7 +162,7 @@ RESTART:
             DbgFlagOff(pG, DBG_FOG_FAR_GREEN);
         }
         TaskExec(0, Title_task, 0);
-        RE4_TRACE("frame loop");
+        RE4_TRACE("frame loop");XFRM_DECL
         for (;;) {
             StopwatchInit();
             ProcessTickInit();
@@ -175,7 +175,7 @@ RESTART:
             SetPrimBuffPtr();
             ClearOt();
             pG->Frame_cnt++;
-            TaskScheduler();
+            XFRM(1 task)TaskScheduler();XFRM(2 sched)
             ProcessTickGet(5, "TaskScheduler");
             if (!SysFlagChk(pG, SYS_TRANS_STOP) || (StaFlagChk(pG, STA_SUB_SCRN))) {
                 IdSys.move();
@@ -197,7 +197,7 @@ RESTART:
                 Draw_cinesco();
             }
             FadeControl(1);
-            DrawOTag(&MainOt[4]);
+            XFRM(3 draw)DrawOTag(&MainOt[4]);
             if (pG->debug_mode != 7) {
                 pLog->disp();
             }
@@ -210,14 +210,14 @@ RESTART:
             Block.checkCondition();
             ProcessTickGet(3, "DRAW REMAIN");
             SPIN_VSYNC(vsync_cnt < GetSystemVcnt() - 1)
-            Render_swap();
+            XFRM(4 swap)Render_swap();
             PPCSync();
             SPIN_VSYNC(vsync_cnt < GetSystemVcnt())
             vsync_cnt = 0;
             systemVSyncPost();
             SysFlagOff(pG, SYS_RENDER_END);
             ProcessTickGet(0, "PROCESS TOTAL");
-            ret = systemResetCheck();
+            XFRM_END XFRM(5 end)ret = systemResetCheck();
             if (ret == 1) {
                 goto RESTART;
             }
