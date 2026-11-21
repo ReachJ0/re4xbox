@@ -12,6 +12,9 @@ extern "C" {
 // Appends text to the ring. Partial lines are fine: a line ends at '\n'. Safe from several threads.
 void XTrace_Add(const char* text);
 
+// "label a b" as one line (development counters).
+void XTrace_Val(const char* label, int a, int b);
+
 // A breadcrumb: kept in a separate small ring that is never drawn on the frame. Only the hang watchdog shows it
 // (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
 void XTrace_Crumb(const char* text);
@@ -41,6 +44,7 @@ void XTrace_HaltForever(void);
 #define XFRM_DECL int xFrame = 0;
 #define XFRM(txt) if (xFrame < 4) { XTrace_Add("fr " #txt "\n"); }
 #define XFRM_END xFrame++;
+#define XFRMV(txt, a, b) if (xFrame < 4) { XTrace_Val("fr " #txt, (int) (a), (int) (b)); }
 #else
 #define RE4_TRACE(s)
 #endif

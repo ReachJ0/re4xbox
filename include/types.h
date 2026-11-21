@@ -42,6 +42,7 @@ void VIWaitForRetrace(void);
 #define XFRM_DECL
 #define XFRM(txt)
 #define XFRM_END
+#define XFRMV(txt, a, b)
 #endif
 
 #ifndef NULL

@@ -210,10 +210,10 @@ RESTART:
             Block.checkCondition();
             ProcessTickGet(3, "DRAW REMAIN");
             SPIN_VSYNC(vsync_cnt < GetSystemVcnt() - 1)
-            XFRM(4 swap)Render_swap();
-            PPCSync();
+            XFRM(4 swap)Render_swap();XFRM(4a flushed)
+            PPCSync();XFRMV(4b spin2 vsync/sys, vsync_cnt, GetSystemVcnt())
             SPIN_VSYNC(vsync_cnt < GetSystemVcnt())
-            vsync_cnt = 0;
+            vsync_cnt = 0;XFRM(4c spun)
             systemVSyncPost();
             SysFlagOff(pG, SYS_RENDER_END);
             ProcessTickGet(0, "PROCESS TOTAL");

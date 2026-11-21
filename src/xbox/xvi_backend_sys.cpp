@@ -56,6 +56,13 @@ static void Unlock(void) { InterlockedExchange(&s_lock, 0); }
 
 static volatile LONG s_traceSeq;   // bumped by every XTrace_Add: the watchdog redraws when it changes
 
+void XTrace_Val(const char* label, int a, int b)
+{
+    char t[48];
+    snprintf(t, sizeof(t), "%s %d %d\n", label, a, b);
+    XTrace_Add(t);
+}
+
 void XTrace_Add(const char* text)
 {
     InterlockedIncrement(&s_traceSeq);
