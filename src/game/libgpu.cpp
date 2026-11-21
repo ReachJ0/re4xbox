@@ -81,6 +81,13 @@ void DrawOTag(u32* pOt)
     GXSetCurrentMtx(0);
     GXSetBlendMode(0, 1, 0, 0);
     GXSetCullMode(0);
+#ifdef RE4_XBOX
+    // Not walked on the Xbox yet: AddPrim links real host pointers while this loop (and DelPrim / ClearOTagR) expect
+    // the 31-bit tag form, so the walk translated an already translated pointer and read unmapped memory. The chain
+    // only holds debug primitives (debug.cpp, datactrl.cpp, main_mem.cpp), so skipping it only hides those overlays.
+    (void) tbl;
+    (void) pOt;
+#else
     if (*pOt == 0xFFFFFFFF) {
         return;
     }
@@ -91,6 +98,7 @@ void DrawOTag(u32* pOt)
         }
         pOt = (u32*) XMEM_TAG(*pOt);
     } while (*pOt != 0xFFFFFFFF);
+#endif
 }
 
 // GX state for one primitive: colour-only vertices, position + colour descriptors, GXBegin.
