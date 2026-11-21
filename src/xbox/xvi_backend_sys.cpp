@@ -80,6 +80,8 @@ void XTrace_Mark(int n)
     s_cnt[n & 31]++;
 }
 
+extern "C" void XOs_ThreadDbg(int*, unsigned*, int*, int*, int*);
+
 void XTrace_Beat(int frame)
 {
     const XGpState* st = XGp_State();
@@ -90,6 +92,13 @@ void XTrace_Beat(int frame)
     snprintf(t, sizeof(t), "vi n%u blk%d fb%p %dx%d blit%u\n", s_dbgPresents, s_dbgBlack, s_dbgFb, s_dbgW, s_dbgH,
              s_dbgBlits);
     XTrace_Add(t);
+    {
+        int rs, hint, prio, state;
+        unsigned bits;
+        XOs_ThreadDbg(&rs, &bits, &hint, &prio, &state);
+        snprintf(t, sizeof(t), "os resched%d bits%08x hint%d prio%d state%d\n", rs, bits, hint, prio, state);
+        XTrace_Add(t);
+    }
     snprintf(t, sizeof(t), "marks %08x\n", s_marks);
     XTrace_Add(t);
     snprintf(t, sizeof(t), "cnt wk%u sl%u en%u ld%u rs%u aw%u\n", s_cnt[6], s_cnt[7], s_cnt[9], s_cnt[10], s_cnt[11], s_cnt[12]);
