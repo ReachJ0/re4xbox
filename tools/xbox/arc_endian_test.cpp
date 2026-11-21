@@ -7,8 +7,32 @@
 static int g_checks = 0, g_fail = 0;
 #define CHECK(c) do { g_checks++; if (!(c)) { g_fail++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while (0)
 static void P32(unsigned char* b, unsigned v) { b[0] = v >> 24; b[1] = v >> 16; b[2] = v >> 8; b[3] = v; }
+static void P16(unsigned char* b, unsigned v) { b[0] = v >> 8; b[1] = v; }
+static void TestCardArc()
+{
+    // [0..3] header, [4..9] ofs: TPL at 0x40, message table at 0x100; the TPL has one descriptor with a 0x24 header
+    unsigned char a[0x180] = {0};
+    P32(a + 16, 0x40); P32(a + 20, 0x100);
+    for (int i = 2; i < 6; i++) P32(a + 16 + i * 4, 0x100 + i);
+    unsigned char* t = a + 0x40;
+    P32(t, 0x20AF30); P32(t + 4, 1); P32(t + 8, 0xC); P32(t + 0xC, 0x20); P32(t + 0x10, 0);
+    P16(t + 0x20, 64); P16(t + 0x22, 32); P32(t + 0x24, 5); P32(t + 0x28, 0x60);
+    P32(a + 0x100, 0xCAFEBABE);   // message table: left alone for now
+    CHECK(XArc_SwapCardArc(a, sizeof a) == 1);
+    CHECK(((uint32_t*) a)[4] == 0x40 && ((uint32_t*) a)[5] == 0x100);
+    CHECK(*(uint32_t*) (t + 4) == 1 && *(uint32_t*) (t + 0xC) == 0x20 && *(uint16_t*) (t + 0x20) == 64 && *(uint32_t*) (t + 0x24) == 5);
+    CHECK(a[0x100] == 0xCA && a[0x103] == 0xBE);
+    unsigned char bad[0x40]; memset(bad, 0xEE, sizeof bad);
+    CHECK(XArc_SwapCardArc(bad, sizeof bad) == 0);
+    unsigned char* g = (unsigned char*) malloc(0x50);
+    memcpy(g, a, 0x50); memset(g, 0, 16); P32(g + 16, 0x40); P32(g + 20, 0x100);   // TPL cut by the buffer end
+    CHECK(XArc_SwapCardArc(g, 0x50) == 0);   // nothing read past the buffer (ASan)
+    free(g);
+}
+
 int main()
 {
+    TestCardArc();
     unsigned char a[0x200] = {0};
     // 4 header words, then offsets: first sub-file at 0x40 => the table is 16 words
     P32(a, 0x20); P32(a + 4, 1); P32(a + 8, 2); P32(a + 12, 3);

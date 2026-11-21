@@ -3,6 +3,8 @@
 #ifndef XBOX_XARC_ENDIAN_H
 #define XBOX_XARC_ENDIAN_H
 
+#include "xbox/xtex_endian.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,5 +17,18 @@ unsigned XArc_SwapTable(void* arc, unsigned len, unsigned firstSlot);
 #ifdef __cplusplus
 }
 #endif
+
+// An archive laid out like CardArc (card.cpp): four header words, six offsets, the first sub-file being a TPL (the
+// card icons / banner in SndMem.sub_adr). Converts the table and that TPL; returns 1 on success.
+static inline int XArc_SwapCardArc(void* arc, unsigned len)
+{
+    unsigned* o = (unsigned*) arc + 4;
+    unsigned end;
+    if (!XArc_SwapTable(arc, len, 4)) {
+        return 0;
+    }
+    end = (o[1] > o[0] && o[1] <= len) ? o[1] : len;
+    return XTex_SwapTpl((unsigned char*) arc + o[0], end - o[0]);
+}
 
 #endif

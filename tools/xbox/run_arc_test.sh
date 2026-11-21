@@ -6,5 +6,5 @@ OUT=${TMPDIR:-/tmp}/re4_arc_test.$$
 mkdir -p "$OUT"
 trap 'rm -rf "$OUT"' EXIT
 ${CXX:-c++} -std=gnu++11 -Wall -Wextra -g -fsanitize=address,undefined ${EXTRA:-} -DRE4_XBOX -I "$ROOT/include" \
-    "$ROOT/tools/xbox/arc_endian_test.cpp" "$ROOT/src/xbox/xarc_endian.cpp" -o "$OUT/arc_test"
+    "$ROOT/tools/xbox/arc_endian_test.cpp" "$ROOT/src/xbox/xarc_endian.cpp" "$ROOT/src/xbox/xtex_endian.cpp" -o "$OUT/arc_test"
 "$OUT/arc_test"

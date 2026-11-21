@@ -146,7 +146,7 @@ void SndInit()
 #line 170 SND_FILE
     r = DvdRead(0x59, (void*) SndMem.sub_adr, 0, 0, 0, 0x8001, __FILE__, __LINE__);
     Dvd.ReadCheck(r, &len, 0, 0);
-    SndMem.sub_end = SndMem.sub_adr + len;
+    SndMem.sub_end = SndMem.sub_adr + len; XSUBDATA(SndMem.sub_adr, len)
 
     SndDriverInit();
     pSys->SndMode = Snd_get_sound_mode();
