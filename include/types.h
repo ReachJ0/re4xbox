@@ -41,6 +41,7 @@ void VIWaitForRetrace(void);
 #else
 #define SPIN_VSYNC(cond) while (cond) {}
 #define XFRM_DECL
+#define XMARK(n)
 #define XCARD_TRACE(a, b, c, d)
 #define XFRM(txt)
 #define XFRM_END

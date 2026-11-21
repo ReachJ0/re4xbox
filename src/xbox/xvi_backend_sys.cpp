@@ -72,6 +72,8 @@ void XTrace_CardState(int a, int b, int c, int d)
     s_card[3] = d;
 }
 void XTrace_CardStatus(unsigned status) { s_cardStatus = status; }
+static volatile unsigned s_marks;
+void XTrace_Mark(int n) { s_marks |= 1u << n; }
 
 void XTrace_Beat(int frame)
 {
@@ -82,6 +84,8 @@ void XTrace_Beat(int frame)
     XTrace_Add(t);
     snprintf(t, sizeof(t), "vi n%u blk%d fb%p %dx%d blit%u\n", s_dbgPresents, s_dbgBlack, s_dbgFb, s_dbgW, s_dbgH,
              s_dbgBlits);
+    XTrace_Add(t);
+    snprintf(t, sizeof(t), "marks %08x\n", s_marks);
     XTrace_Add(t);
     snprintf(t, sizeof(t), "card st%08x m%d r%d.%d.%d\n", s_cardStatus, s_card[0], s_card[1], s_card[2], s_card[3]);
     XTrace_Add(t);

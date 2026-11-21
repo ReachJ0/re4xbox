@@ -24,6 +24,7 @@ void XTrace_Val4(const char* label, int a, int b, int c, int d);
 // Last state of the memory card task (mode, Rno0, Rno1, Rno2) and the game's CardStatus: printed by the heartbeat.
 void XTrace_CardState(int a, int b, int c, int d);
 void XTrace_CardStatus(unsigned status);
+void XTrace_Mark(int n);   // sets bit n of the boot milestone mask the heartbeat prints
 
 // A breadcrumb: kept in a separate small ring that is never drawn on the frame. Only the hang watchdog shows it
 // (xvi_backend_sys.cpp), on the debug screen, because a hang inside a frame leaves the frame stale.
@@ -53,6 +54,8 @@ void XTrace_HaltForever(void);
 // Per-frame breadcrumbs of the first 4 frames of the main loop (main.cpp). Written inline so no line numbers move.
 // Memory card task (card.cpp MainLoop): records (mode, Rno0, Rno1, Rno2) every pass; the heartbeat prints it.
 #define XCARD_TRACE(a, b, c, d) XTrace_CardState((a), (b), (c), (d));
+// Sticky boot milestones: XMARK(n) sets bit n of a mask that the heartbeat prints (so a missing step is visible).
+#define XMARK(n) XTrace_Mark(n);
 #define XFRM_DECL int xFrame = 0;
 #define XFRM(txt) if (xFrame < 4) { XTrace_Add("fr " #txt "\n"); }
 #define XFRM_END xFrame++; if (xFrame % 60 == 0) { XTrace_CardStatus((unsigned) pG->CardStatus); XTrace_Beat(xFrame); }

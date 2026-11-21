@@ -2156,7 +2156,7 @@ void cCard::MainLoop(int arg)
 // memcard message layouts, runs MainLoop, tears everything down.
 void CardMainTask(int mode)
 {
-    SysFlagOn(pG, SYS_TYPEWRITER);
+    XMARK(5) SysFlagOn(pG, SYS_TYPEWRITER);
     pCard = new cCard;
     g_id = new CardID;
     if (pSys->language == 0) {
@@ -2231,7 +2231,7 @@ void CardSysSave()
 // Boot: chains the first-check card screen.
 void CardFirstCheck()
 {
-    if (pRK->reset_flag != 0 && pRK->MemcardCheckDone == 1) {
+    XMARK(4) if (pRK->reset_flag != 0 && pRK->MemcardCheckDone == 1) {
         pG->CardStatus |= 0x80000000;
         TaskExit();
     }

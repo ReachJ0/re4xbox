@@ -52,7 +52,7 @@ void SetTvMode(GXRenderModeObj* pRmode)
         OSPanic(__FILE__, __LINE__, "invalid TV format\n");
         break;
     }
-    pTv->Status = 1;
+    XMARK(0) pTv->Status = 1;
     TaskExec(1, tvModeCheckTask, 0);
 }
 
@@ -63,7 +63,7 @@ void tvModeCheckTask()
     u32 c0 = 0x00000000;
     u32 c1 = 0x000000FF;
 
-    FadeSet(0, (GXColor*) &c0, (GXColor*) &c1, 0, 0, 0);
+    XMARK(1) FadeSet(0, (GXColor*) &c0, (GXColor*) &c1, 0, 0, 0);
     tv_mode_cnt = 0;
     pTv->Rno0 = 0;
     while (1) {
@@ -76,7 +76,7 @@ void tvModeCheckTask()
 // B held or progressive already on opens the menu; else straight to exit. Marks the check done.
 void tvModeTrigger(TV_MODE* pTv)
 {
-    if (VIGetDTVStatus() != 0 && pRK->tv_mode_select == 0) {
+    XMARK(2) if (VIGetDTVStatus() != 0 && pRK->tv_mode_select == 0) {
         if (Joy[0].err == -3 || Joy[0].err == -2) {
             tv_mode_cnt++;
             if (tv_mode_cnt <= 29) {
@@ -166,6 +166,6 @@ void tvModeMenu_progressive(TV_MODE* pTv)
 // State 2: done — runs the memory card first check and ends the task.
 void tvModeExit(TV_MODE* pTv)
 {
-    pTv->Status = 0;
+    XMARK(3) pTv->Status = 0;
     CardFirstCheck();
 }
