@@ -11,6 +11,7 @@ float* g_z;
 unsigned long long g_tris;
 unsigned long long g_px, g_usDraw, g_usCopy, g_draws;   // statistics for the development HUD
 unsigned long long (*g_clock)(void);
+unsigned long long g_maxDrawPx, g_bigDraws;           // largest draw call (pixels) and draws above 20000 pixels, since the last read
 
 // A vertex after the position matrix and projection (clip space) with its interpolated attributes.
 struct V {
@@ -145,6 +146,7 @@ struct Ctx {
     int acomp0, acomp1, alogic, aref0, aref1;
     bool aTest;                             // false when the alpha compare cannot reject anything
     bool passclr;                           // single PASSCLR stage: the output is the rasterised colour
+    int fast;                               // 2: REPLACE (texture), 3: MODULATE (texture * colour), 0: generic
     int ntc;                                // texture coordinate sets the stages sample (0 = none)
     const unsigned char* lim;               // end of game memory (texture bounds)
 };
@@ -228,6 +230,15 @@ void SetupTev(const XGpState* st, Ctx* c)
         c->passclr = c->nstage == 1 && s.cchan >= 0 && s.ca == 15 && s.cb == 15 && s.cc == 15 && s.cd == 10 && s.cbias == 0 &&
                      s.cscale == 0 && s.cdest == 0 && s.aa == 7 && s.ab == 7 && s.ac == 7 && s.ad == 5 && s.abias == 0 &&
                      s.ascale == 0 && s.adest == 0;
+    }
+    c->fast = 0;
+    {
+        const Ctx::Stage& s = c->stage[0];
+        bool plain = c->nstage == 1 && s.cmap >= 0 && s.cbias == 0 && s.cscale == 0 && s.cdest == 0 && s.abias == 0 && s.ascale == 0 &&
+                     s.adest == 0 && s.cop == 0 && s.aop == 0 && s.ccoord < 4;
+        if (plain && s.ca == 15 && s.cb == 15 && s.cc == 15 && s.cd == 8 && s.aa == 7 && s.ab == 7 && s.ac == 7 && s.ad == 4) c->fast = 2;
+        if (plain && s.cchan >= 0 && s.ca == 15 && s.cb == 8 && s.cc == 10 && s.cd == 15 && s.aa == 7 && s.ab == 4 && s.ac == 5 && s.ad == 7)
+            c->fast = 3;
     }
     unsigned ac = st->bp[0xF3];
     c->aref0 = (int) (ac & 255); c->aref1 = (int) ((ac >> 8) & 255);
@@ -541,6 +552,19 @@ void Tev(const Ctx& c, const float* col, const float (*tc)[2], float* out)
         out[0] = Clampf(col[0], 0, 255); out[1] = Clampf(col[1], 0, 255); out[2] = Clampf(col[2], 0, 255); out[3] = Clampf(col[3], 0, 255);
         return;
     }
+    if (c.fast) {
+        const Ctx::Stage& s = c.stage[0];
+        float tex[4];
+        Sample(c.map[s.cmap], c.lim, tc[s.ccoord][0], tc[s.ccoord][1], tex);
+        if (c.fast == 2) {
+            out[0] = tex[0]; out[1] = tex[1]; out[2] = tex[2]; out[3] = tex[3];
+        } else {
+            const float k = 1.0f / 255.0f;
+            out[0] = tex[0] * col[0] * k; out[1] = tex[1] * col[1] * k; out[2] = tex[2] * col[2] * k; out[3] = tex[3] * col[3] * k;
+            for (int q = 0; q < 4; q++) out[q] = Clampf(out[q], 0, 255);
+        }
+        return;
+    }
     float reg[4][4];
     memcpy(reg, c.reg, sizeof(reg));
     static const float bias[4] = {0, 128, -128, 0};
@@ -644,6 +668,61 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
     }
     for (int q = 0; q < na; q++) g[q] = inv * (A0 * v0[q] + A1 * v1[q] + A2 * v2[q]);
 
+    // Flat triangle (same colour at the three vertices, no texture sampling, and z either constant or not tested/written):
+    // the pixel value is the same everywhere, so the TEV and the alpha test run once and the rows only store / blend.
+    bool flat = ntc == 0 && v0[0] == v1[0] && v0[0] == v2[0] && v0[1] == v1[1] && v0[1] == v2[1] && v0[2] == v1[2] && v0[2] == v2[2] &&
+                v0[3] == v1[3] && v0[3] == v2[3] && ((!c.zEnable && !c.zUpdate) || (v0[4] == v1[4] && v0[4] == v2[4]));
+    float flatOut[4];
+    float flatZ = 0;
+    if (flat) {
+        const float fz = v0[4] < 0 ? 0 : v0[4] > 16777215.0f ? 16777215.0f : v0[4];
+        if (c.tev) {
+            float noTc[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+            Tev(c, v0, noTc, flatOut);
+        } else {
+            for (int q = 0; q < 4; q++) flatOut[q] = v0[q];
+        }
+        if (c.aTest && !AlphaPass(c, flatOut[3])) return;
+        const bool opaque = !(c.blend & 1) || (((c.blend >> 8) & 7) == 4 && ((c.blend >> 5) & 7) == 5 && flatOut[3] >= 255.0f);
+        const bool noZ = !c.zEnable && !c.zUpdate;
+        unsigned packed = 0;
+        if (opaque && ((c.blend >> 3) & 1) && ((c.blend >> 4) & 1) && noZ) {   // plain store of a constant
+            packed = ((unsigned) Clamp8(flatOut[3]) << 24) | ((unsigned) Clamp8(flatOut[0]) << 16) | ((unsigned) Clamp8(flatOut[1]) << 8) |
+                     (unsigned) Clamp8(flatOut[2]);
+            for (int y = iy0; y <= iy1; y++) {
+                float py = (float) y + 0.5f, px0 = (float) ix0 + 0.5f;
+                float e0 = A0 * (px0 - X0) + B0 * (py - Y0), e1 = A1 * (px0 - X1) + B1 * (py - Y1), e2 = A2 * (px0 - X2) + B2 * (py - Y2);
+                int lo = 0, hi = ix1 - ix0;
+                const float eA[3] = {A0, A1, A2}, eE[3] = {e0, e1, e2};
+                bool empty = false;
+                for (int k = 0; k < 3; k++) {
+                    if (eA[k] > 0) {
+                        float t = floorf(-eE[k] / eA[k]) - 1;
+                        if (t > (float) hi + 1) { empty = true; break; }
+                        if (t > (float) lo) lo = (int) t;
+                    } else if (eA[k] < 0) {
+                        float t = ceilf(eE[k] / -eA[k]) + 1;
+                        if (t < (float) lo - 1) { empty = true; break; }
+                        if (t < (float) hi) hi = (int) t;
+                    } else if (eE[k] < 0) {
+                        empty = true;
+                        break;
+                    }
+                }
+                if (empty || lo > hi) continue;
+                unsigned* row = g_pix + y * XRASTER_W + ix0;
+                for (int xr = lo; xr <= hi; xr++) {
+                    float f = (float) xr;
+                    if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
+                    row[xr] = packed;
+                    g_px++;
+                }
+            }
+            return;
+        }
+        flatZ = fz;
+    }
+
     for (int y = iy0; y <= iy1; y++) {
         float py = (float) y + 0.5f, px0 = (float) ix0 + 0.5f;
         float e0 = A0 * (px0 - X0) + B0 * (py - Y0);
@@ -678,6 +757,11 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
             if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
             int x = ix0 + xr;
             int idx = y * XRASTER_W + x;
+            if (flat) {   // constant colour and z: only the z test and the blend are per pixel
+                if (c.zEnable && !ZTest(c.zFunc, flatZ, g_z[idx])) continue;
+                PlotPixel(c, idx, flatZ, flatOut);
+                continue;
+            }
             float at[14];
             float dxs = (float) (xr - lo);
             for (int q = 0; q < na; q++) at[q] = base[q] + g[q] * dxs;
@@ -843,8 +927,11 @@ void CopyCmd(unsigned cmd, const XGpState* st)
 void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, void* u)
 {
     unsigned long long t0 = g_clock ? g_clock() : 0;
+    unsigned long long px0 = g_px;
     DrawImpl(prim, a, v, count, st, u);
     g_draws++;
+    if (g_px - px0 > g_maxDrawPx) g_maxDrawPx = g_px - px0;
+    if (g_px - px0 > 20000) g_bigDraws++;
     if (g_clock) g_usDraw += g_clock() - t0;
 }
 
@@ -891,4 +978,9 @@ extern "C" void XRaster_Stats(unsigned long long* usDraw, unsigned long long* us
                               unsigned long long* draws)
 {
     *usDraw = g_usDraw; *usCopy = g_usCopy; *px = g_px; *tris = g_tris; *draws = g_draws;
+}
+extern "C" void XRaster_BigDraws(unsigned long long* maxPx, unsigned long long* bigDraws)
+{
+    *maxPx = g_maxDrawPx; *bigDraws = g_bigDraws;
+    g_maxDrawPx = 0; g_bigDraws = 0;
 }

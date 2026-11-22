@@ -376,7 +376,10 @@ static void DrawHud(void)
     char l3[64], l4[64];
     snprintf(l3, sizeof(l3), "frame %ums draw %ums copy %ums blit %ums   ", (unsigned) ((now - pT) / 1000), (unsigned) ((usD - pUsD) / 1000),
              (unsigned) ((usC - pUsC) / 1000), (unsigned) (s_usBlit / 1000));
-    snprintf(l4, sizeof(l4), "dr%u tri%u px%u   ", (unsigned) (dr - pDr), (unsigned) (tr - pTr), (unsigned) (px - pPx));
+    unsigned long long mx, big;
+    XRaster_BigDraws(&mx, &big);
+    snprintf(l4, sizeof(l4), "dr%u tri%u px%u mx%u big%u   ", (unsigned) (dr - pDr), (unsigned) (tr - pTr), (unsigned) (px - pPx), (unsigned) mx,
+             (unsigned) big);
     pUsD = usD; pUsC = usC; pPx = px; pTr = tr; pDr = dr; pT = now;
     unsigned reads, btn, anyBtn;
     int ok, err, lx, ly;

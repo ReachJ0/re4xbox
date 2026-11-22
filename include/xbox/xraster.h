@@ -29,6 +29,7 @@ unsigned XRaster_CopySerial(void);                        // counts EFB -> XFB c
 void XRaster_SetClock(unsigned long long (*us)(void));    // optional microsecond clock for the statistics below
 void XRaster_Stats(unsigned long long* usDraw, unsigned long long* usCopy, unsigned long long* px, unsigned long long* tris,
                    unsigned long long* draws);       // totals since the start: draw / copy time, pixels written, triangles, draw calls
+void XRaster_BigDraws(unsigned long long* maxPx, unsigned long long* bigDraws);   // largest draw call and draws > 20000 px since the last call
 unsigned long long XRaster_Triangles(void);               // triangles that reached the pixel stage (statistics)
 
 #ifdef __cplusplus
