@@ -8,6 +8,7 @@
 #include "xbox/xtrace.h"
 #include "xbox/xgp.h"
 #include "xbox/xraster.h"
+#include "xbox/xvi_backend.h"
 
 #undef main
 extern "C++" int re4_main();
@@ -27,6 +28,7 @@ int main(void)
     XCrash_Install();
     XRaster_Init();                         // software GX drawing: primitives go to the EFB, GXCopyDisp fills the XFB
     XGp_SetBackend(XRaster_Backend());
+    XRaster_SetClock(XViBackend_NowUs);
     XTrace_Add("calling re4_main\n");
     re4_main();
     XTrace_Add("re4_main returned\n");   // make RE4_RUN_GAME=1 (see docs/xbox.md): runs the game; not verified to boot

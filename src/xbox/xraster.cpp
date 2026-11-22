@@ -9,6 +9,8 @@ namespace {
 unsigned* g_pix;
 float* g_z;
 unsigned long long g_tris;
+unsigned long long g_px, g_usDraw, g_usCopy, g_draws;   // statistics for the development HUD
+unsigned long long (*g_clock)(void);
 
 // A vertex after the position matrix and projection (clip space) with its interpolated attributes.
 struct V {
@@ -133,13 +135,21 @@ struct Ctx {
         int ca, cb, cc, cd, cbias, cop, cclamp, cscale, cdest;
         int aa, ab, ac, ad, abias, aop, aclamp, ascale, adest;
         int kc, ka;                         // constant selections
+        float kcv[3], kav;                  // the selected constants, resolved once per batch
+        bool needTex;
     } stage[16];
     int nstage;
     bool tev;                               // false: the TEV was never programmed, draw the vertex colour
     float kreg[4][4];
     float reg[4][4];                        // prev, c0, c1, c2 initial values (r g b a)
     int acomp0, acomp1, alogic, aref0, aref1;
+    bool aTest;                             // false when the alpha compare cannot reject anything
+    bool passclr;                           // single PASSCLR stage: the output is the rasterised colour
+    int ntc;                                // texture coordinate sets the stages sample (0 = none)
+    const unsigned char* lim;               // end of game memory (texture bounds)
 };
+
+float Konst(const Ctx& c, int sel, bool alpha);
 
 float Signed11(unsigned v)
 {
@@ -189,6 +199,7 @@ void SetupTev(const XGpState* st, Ctx* c)
         s.ka = (int) ((ks >> ((i & 1) ? 19 : 9)) & 31);
     }
     c->tev = any;
+    c->lim = mem ? mem + memSize : 0;
     for (int i = 0; i < 4; i++) {
         unsigned ra = st->bp[0xE0 + 2 * i], bg = st->bp[0xE1 + 2 * i];
         c->reg[i][0] = Signed11(ra); c->reg[i][3] = Signed11(ra >> 12);
@@ -197,9 +208,32 @@ void SetupTev(const XGpState* st, Ctx* c)
         c->kreg[i][0] = Signed11(ra); c->kreg[i][3] = Signed11(ra >> 12);
         c->kreg[i][2] = Signed11(bg); c->kreg[i][1] = Signed11(bg >> 12);
     }
+    c->ntc = 0;
+    for (int i = 0; i < c->nstage; i++) {
+        Ctx::Stage& s = c->stage[i];
+        if (s.kc >= 16) {
+            s.kcv[0] = s.kcv[1] = s.kcv[2] = c->kreg[(s.kc - 16) & 3][((s.kc - 16) >> 2) & 3];
+        } else if (s.kc >= 12) {
+            for (int k = 0; k < 3; k++) s.kcv[k] = c->kreg[s.kc - 12][k];
+        } else {
+            s.kcv[0] = s.kcv[1] = s.kcv[2] = Konst(*c, s.kc, false);
+        }
+        s.kav = Konst(*c, s.ka, true);
+        s.needTex = s.cmap >= 0 && (s.ca == 8 || s.ca == 9 || s.cb == 8 || s.cb == 9 || s.cc == 8 || s.cc == 9 ||
+                                     s.cd == 8 || s.cd == 9 || s.aa == 4 || s.ab == 4 || s.ac == 4 || s.ad == 4);
+        if (s.needTex && s.ccoord + 1 > c->ntc) c->ntc = (s.ccoord & 3) + 1;
+    }
+    {
+        const Ctx::Stage& s = c->stage[0];
+        c->passclr = c->nstage == 1 && s.cchan >= 0 && s.ca == 15 && s.cb == 15 && s.cc == 15 && s.cd == 10 && s.cbias == 0 &&
+                     s.cscale == 0 && s.cdest == 0 && s.aa == 7 && s.ab == 7 && s.ac == 7 && s.ad == 5 && s.abias == 0 &&
+                     s.ascale == 0 && s.adest == 0;
+    }
     unsigned ac = st->bp[0xF3];
     c->aref0 = (int) (ac & 255); c->aref1 = (int) ((ac >> 8) & 255);
     c->acomp0 = (int) ((ac >> 16) & 7); c->acomp1 = (int) ((ac >> 19) & 7); c->alogic = (int) ((ac >> 22) & 3);
+    c->aTest = !(c->acomp0 == 7 && c->acomp1 == 7);   // two "always" compares pass under every logic except xor, which no game uses
+    if (c->acomp0 == 7 && c->acomp1 == 7 && c->alogic == 2) c->aTest = true;
 }
 
 void Setup(const XGpState* st, Ctx* c)
@@ -257,29 +291,45 @@ float Factor(int k, const float* s, const float* d, int ch, bool isDst)
     }
 }
 
+// Writes a pixel whose z test already passed (z already clamped).
+inline void PlotPixel(const Ctx& c, int i, float z, const float* col)
+{
+    g_px++;
+    unsigned old = g_pix[i];
+    unsigned r, g, b, a;
+    if (c.blend & 1) {
+        float d[4] = {(float) ((old >> 16) & 255), (float) ((old >> 8) & 255), (float) (old & 255), (float) (old >> 24)};
+        float o[3];
+        int dstF = (int) ((c.blend >> 5) & 7), srcF = (int) ((c.blend >> 8) & 7);
+        bool sub = (c.blend >> 11) & 1;
+        if (srcF == 4 && dstF == 5 && !sub) {   // the usual alpha blend
+            float sa = col[3] * (1.0f / 255.0f), ia = 1.0f - sa;
+            for (int ch = 0; ch < 3; ch++) o[ch] = col[ch] * sa + d[ch] * ia;
+        } else {
+            for (int ch = 0; ch < 3; ch++) {
+                float sv = col[ch] * Factor(srcF, col, d, ch, false);
+                float t = d[ch] * Factor(dstF, col, d, ch, true);
+                o[ch] = sub ? t - sv : sv + t;
+            }
+        }
+        r = Clamp8(o[0]); g = Clamp8(o[1]); b = Clamp8(o[2]);
+    } else {
+        r = Clamp8(col[0]); g = Clamp8(col[1]); b = Clamp8(col[2]);
+    }
+    a = Clamp8(col[3]);
+    if (!((c.blend >> 3) & 1)) { r = (old >> 16) & 255; g = (old >> 8) & 255; b = old & 255; }
+    if (!((c.blend >> 4) & 1)) a = old >> 24;
+    g_pix[i] = (a << 24) | (r << 16) | (g << 8) | b;
+    if (c.zUpdate) g_z[i] = z;
+}
+
 void Plot(const Ctx& c, int x, int y, float z, const float* col)
 {
     int i = y * XRASTER_W + x;
     if (z < 0) z = 0;
     if (z > 16777215.0f) z = 16777215.0f;
     if (c.zEnable && !ZTest(c.zFunc, z, g_z[i])) return;
-    unsigned old = g_pix[i];
-    float d[4] = {(float) ((old >> 16) & 255), (float) ((old >> 8) & 255), (float) (old & 255), (float) (old >> 24)};
-    float o[4] = {col[0], col[1], col[2], col[3]};
-    if (c.blend & 1) {
-        int dstF = (int) ((c.blend >> 5) & 7), srcF = (int) ((c.blend >> 8) & 7);
-        bool sub = (c.blend >> 11) & 1;
-        for (int ch = 0; ch < 3; ch++) {
-            float s = col[ch] * Factor(srcF, col, d, ch, false);
-            float t = d[ch] * Factor(dstF, col, d, ch, true);
-            o[ch] = sub ? t - s : s + t;
-        }
-    }
-    unsigned r = Clamp8(o[0]), g = Clamp8(o[1]), b = Clamp8(o[2]), a = Clamp8(o[3]);
-    if (!((c.blend >> 3) & 1)) { r = (old >> 16) & 255; g = (old >> 8) & 255; b = old & 255; }
-    if (!((c.blend >> 4) & 1)) a = old >> 24;
-    g_pix[i] = (a << 24) | (r << 16) | (g << 8) | b;
-    if (c.zUpdate) g_z[i] = z;
+    PlotPixel(c, i, z, col);
 }
 
 
@@ -388,8 +438,17 @@ void Texel(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o)
     o[0] = r; o[1] = g; o[2] = bl; o[3] = a;
 }
 
+inline int IFloor(float f)
+{
+    int i = (int) f;
+    return (float) i > f ? i - 1 : i;
+}
+
 inline int Wrap(int v, int n, int mode)
 {
+    if (mode == 0 || (unsigned) v < (unsigned) n) {   // clamp, or already inside
+        return v < 0 ? 0 : v >= n ? n - 1 : v;
+    }
     if (mode == 1) {   // repeat
         v %= n;
         return v < 0 ? v + n : v;
@@ -403,30 +462,27 @@ inline int Wrap(int v, int n, int mode)
     return v < 0 ? 0 : v >= n ? n - 1 : v;   // clamp
 }
 
-// Samples map `m` at texture coordinates (s, t) in texels (the vertex stream gives them in texels already scaled
-// by the VAT; GX texture coordinates are normalised, so they are multiplied by the size here).
-void Sample(const Ctx::Map& m, float s, float t, float* o)
+// Samples map `m` at normalised texture coordinates (s, t); `lim` is the end of game memory.
+void Sample(const Ctx::Map& m, const unsigned char* lim, float s, float t, float* o)
 {
-    unsigned memSize = 0;
-    unsigned char* mem = XGp_MemoryBase(&memSize);
-    if (!m.data || !mem || m.w <= 0 || m.h <= 0) {
+    if (!m.data || m.w <= 0 || m.h <= 0) {
         o[0] = o[1] = o[2] = o[3] = 255;
         return;
     }
-    const unsigned char* lim = mem + memSize;
     float u = s * (float) m.w, v = t * (float) m.h;
     if (!m.linear) {
-        Texel(m, Wrap((int) floorf(u), m.w, m.wrapS), Wrap((int) floorf(v), m.h, m.wrapT), lim, o);
+        Texel(m, Wrap(IFloor(u), m.w, m.wrapS), Wrap(IFloor(v), m.h, m.wrapT), lim, o);
         return;
     }
     u -= 0.5f; v -= 0.5f;
-    int x0 = (int) floorf(u), y0 = (int) floorf(v);
+    int x0 = IFloor(u), y0 = IFloor(v);
     float fx = u - (float) x0, fy = v - (float) y0;
     float a[4], b[4], c[4], d[4];
-    Texel(m, Wrap(x0, m.w, m.wrapS), Wrap(y0, m.h, m.wrapT), lim, a);
-    Texel(m, Wrap(x0 + 1, m.w, m.wrapS), Wrap(y0, m.h, m.wrapT), lim, b);
-    Texel(m, Wrap(x0, m.w, m.wrapS), Wrap(y0 + 1, m.h, m.wrapT), lim, c);
-    Texel(m, Wrap(x0 + 1, m.w, m.wrapS), Wrap(y0 + 1, m.h, m.wrapT), lim, d);
+    int xa = Wrap(x0, m.w, m.wrapS), xb = Wrap(x0 + 1, m.w, m.wrapS), ya = Wrap(y0, m.h, m.wrapT), yb = Wrap(y0 + 1, m.h, m.wrapT);
+    Texel(m, xa, ya, lim, a);
+    Texel(m, xb, ya, lim, b);
+    Texel(m, xa, yb, lim, c);
+    Texel(m, xb, yb, lim, d);
     for (int k = 0; k < 4; k++) o[k] = (a[k] * (1 - fx) + b[k] * fx) * (1 - fy) + (c[k] * (1 - fx) + d[k] * fx) * fy;
 }
 
@@ -445,50 +501,68 @@ float Konst(const Ctx& c, int sel, bool alpha)
 
 float Clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+inline float CSel(int sel, int k, const float (*reg)[4], const float* tex, const float* ras, const float* kc)
+{
+    switch (sel) {
+    case 0: return reg[0][k];
+    case 1: return reg[0][3];
+    case 2: return reg[1][k];
+    case 3: return reg[1][3];
+    case 4: return reg[2][k];
+    case 5: return reg[2][3];
+    case 6: return reg[3][k];
+    case 7: return reg[3][3];
+    case 8: return tex[k];
+    case 9: return tex[3];
+    case 10: return ras[k];
+    case 11: return ras[3];
+    case 12: return 255.0f;
+    case 13: return 128.0f;
+    case 14: return kc[k];
+    default: return 0.0f;
+    }
+}
+
+inline float ASel(int sel, const float (*reg)[4], const float* tex, const float* ras, float ka)
+{
+    switch (sel) {
+    case 0: case 1: case 2: case 3: return reg[sel][3];
+    case 4: return tex[3];
+    case 5: return ras[3];
+    case 6: return ka;
+    default: return 0.0f;
+    }
+}
+
 // Runs the TEV stages for one pixel; col = rasterised colour, tc = interpolated texture coordinates.
 void Tev(const Ctx& c, const float* col, const float (*tc)[2], float* out)
 {
+    if (c.passclr) {
+        out[0] = Clampf(col[0], 0, 255); out[1] = Clampf(col[1], 0, 255); out[2] = Clampf(col[2], 0, 255); out[3] = Clampf(col[3], 0, 255);
+        return;
+    }
     float reg[4][4];
     memcpy(reg, c.reg, sizeof(reg));
+    static const float bias[4] = {0, 128, -128, 0};
+    static const float scale[4] = {1, 2, 4, 0.5f};
     for (int i = 0; i < c.nstage; i++) {
         const Ctx::Stage& s = c.stage[i];
-        float tex[4] = {255, 255, 255, 255}, ras[4] = {0, 0, 0, 0};
-        if (s.cmap >= 0) Sample(c.map[s.cmap], tc[s.ccoord & 3][0], tc[s.ccoord & 3][1], tex);
-        if (s.cchan >= 0) memcpy(ras, col, sizeof(ras));
-        float kc[3], ka;
-        if (s.kc >= 16) {
-            int k = (s.kc - 16) & 3, comp = (s.kc - 16) >> 2;   // R G B A of K0..K3 (as grey)
-            kc[0] = kc[1] = kc[2] = c.kreg[k][comp & 3];
-        } else if (s.kc >= 12) {
-            int k = s.kc - 12;
-            kc[0] = c.kreg[k][0]; kc[1] = c.kreg[k][1]; kc[2] = c.kreg[k][2];
-        } else {
-            kc[0] = kc[1] = kc[2] = Konst(c, s.kc, false);
-        }
-        ka = Konst(c, s.ka, true);
-        float in[16][3];
-        for (int k = 0; k < 3; k++) {
-            in[0][k] = reg[0][k]; in[1][k] = reg[0][3];
-            in[2][k] = reg[1][k]; in[3][k] = reg[1][3];
-            in[4][k] = reg[2][k]; in[5][k] = reg[2][3];
-            in[6][k] = reg[3][k]; in[7][k] = reg[3][3];
-            in[8][k] = tex[k]; in[9][k] = tex[3];
-            in[10][k] = ras[k]; in[11][k] = ras[3];
-            in[12][k] = 255; in[13][k] = 128; in[14][k] = kc[k]; in[15][k] = 0;
-        }
-        float ain[8] = {reg[0][3], reg[1][3], reg[2][3], reg[3][3], tex[3], ras[3], ka, 0};
-        static const float bias[4] = {0, 128, -128, 0};
-        static const float scale[4] = {1, 2, 4, 0.5f};
+        float tex[4] = {255, 255, 255, 255};
+        if (s.needTex) Sample(c.map[s.cmap], c.lim, tc[s.ccoord & 3][0], tc[s.ccoord & 3][1], tex);
+        static const float zero[4] = {0, 0, 0, 0};
+        const float* ras = s.cchan >= 0 ? col : zero;
         float res[4];
         for (int k = 0; k < 3; k++) {
-            float a = in[s.ca][k], b = in[s.cb][k], cc = in[s.cc][k] / 255.0f, d = in[s.cd][k];
+            float a = CSel(s.ca, k, reg, tex, ras, s.kcv), b = CSel(s.cb, k, reg, tex, ras, s.kcv);
+            float cc = CSel(s.cc, k, reg, tex, ras, s.kcv) * (1.0f / 255.0f), d = CSel(s.cd, k, reg, tex, ras, s.kcv);
             float v = (1 - cc) * a + cc * b;
             v = (s.cop ? d - v : d + v) + bias[s.cbias];
             v *= scale[s.cscale];
             res[k] = s.cclamp ? Clampf(v, 0, 255) : Clampf(v, -1024, 1023);
         }
         {
-            float a = ain[s.aa], b = ain[s.ab], cc = ain[s.ac] / 255.0f, d = ain[s.ad];
+            float a = ASel(s.aa, reg, tex, ras, s.kav), b = ASel(s.ab, reg, tex, ras, s.kav);
+            float cc = ASel(s.ac, reg, tex, ras, s.kav) * (1.0f / 255.0f), d = ASel(s.ad, reg, tex, ras, s.kav);
             float v = (1 - cc) * a + cc * b;
             v = (s.aop ? d - v : d + v) + bias[s.abias];
             v *= scale[s.ascale];
@@ -543,39 +617,91 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
     float miny = fminf(p0->sy, fminf(p1->sy, p2->sy)), maxy = fmaxf(p0->sy, fmaxf(p1->sy, p2->sy));
     int ix0 = (int) fmaxf((float) c.x0, floorf(minx)), ix1 = (int) fminf((float) c.x1, ceilf(maxx));
     int iy0 = (int) fmaxf((float) c.y0, floorf(miny)), iy1 = (int) fminf((float) c.y1, ceilf(maxy));
+    if (ix0 > ix1 || iy0 > iy1) return;
     float inv = 1.0f / area;
     g_tris++;
+
+    // Edge functions e_i(px, py) = A_i * (px - ox_i) + B_i * (py - oy_i); inside when all are >= 0.
+    float A0 = -(p2->sy - p1->sy), B0 = p2->sx - p1->sx, X0 = p1->sx, Y0 = p1->sy;
+    float A1 = -(p0->sy - p2->sy), B1 = p0->sx - p2->sx, X1 = p2->sx, Y1 = p2->sy;
+    float A2 = -(p1->sy - p0->sy), B2 = p1->sx - p0->sx, X2 = p0->sx, Y2 = p0->sy;
+
+    // Attributes, interpolated linearly in screen space: colour (0..3), z (4), 1/w (5) and the texture
+    // coordinates already multiplied by 1/w (6..), divided by the interpolated 1/w per pixel.
+    const int ntc = c.tev ? c.ntc : 0;
+    const int na = 6 + 2 * ntc;
+    float v0[14], v1[14], v2[14], g[14];
+    const V* pp[3] = {p0, p1, p2};
+    float* vv[3] = {v0, v1, v2};
+    for (int k = 0; k < 3; k++) {
+        for (int q = 0; q < 4; q++) vv[k][q] = pp[k]->col[q];
+        vv[k][4] = pp[k]->sz;
+        vv[k][5] = pp[k]->iw;
+        for (int t = 0; t < ntc; t++) {
+            vv[k][6 + 2 * t] = pp[k]->tc[t][0] * pp[k]->iw;
+            vv[k][7 + 2 * t] = pp[k]->tc[t][1] * pp[k]->iw;
+        }
+    }
+    for (int q = 0; q < na; q++) g[q] = inv * (A0 * v0[q] + A1 * v1[q] + A2 * v2[q]);
+
     for (int y = iy0; y <= iy1; y++) {
-        for (int x = ix0; x <= ix1; x++) {
-            float px = (float) x + 0.5f, py = (float) y + 0.5f;
-            float w0 = (p2->sx - p1->sx) * (py - p1->sy) - (px - p1->sx) * (p2->sy - p1->sy);
-            float w1 = (p0->sx - p2->sx) * (py - p2->sy) - (px - p2->sx) * (p0->sy - p2->sy);
-            float w2 = (p1->sx - p0->sx) * (py - p0->sy) - (px - p0->sx) * (p1->sy - p0->sy);
-            if (w0 < 0 || w1 < 0 || w2 < 0) continue;
-            w0 *= inv;
-            w1 *= inv;
-            w2 *= inv;
-            float col[4];
-            for (int k = 0; k < 4; k++) col[k] = w0 * p0->col[k] + w1 * p1->col[k] + w2 * p2->col[k];
-            float z = w0 * p0->sz + w1 * p1->sz + w2 * p2->sz;
-            if (c.tev) {   // perspective-correct texture coordinates, then the TEV
-                float q0 = w0 * p0->iw, q1 = w1 * p1->iw, q2 = w2 * p2->iw, qs = q0 + q1 + q2;
-                float tc[4][2];
-                if (qs != 0) {
-                    q0 /= qs; q1 /= qs; q2 /= qs;
-                } else {
-                    q0 = w0; q1 = w1; q2 = w2;
-                }
-                for (int t = 0; t < 4; t++)
-                    for (int k = 0; k < 2; k++) tc[t][k] = q0 * p0->tc[t][k] + q1 * p1->tc[t][k] + q2 * p2->tc[t][k];
-                float out[4];
-                Tev(c, col, tc, out);
-                if (!AlphaPass(c, out[3])) continue;
-                Plot(c, x, y, z, out);
-            } else {
-                if (!AlphaPass(c, col[3])) continue;
-                Plot(c, x, y, z, col);
+        float py = (float) y + 0.5f, px0 = (float) ix0 + 0.5f;
+        float e0 = A0 * (px0 - X0) + B0 * (py - Y0);
+        float e1 = A1 * (px0 - X1) + B1 * (py - Y1);
+        float e2 = A2 * (px0 - X2) + B2 * (py - Y2);
+        // x range (relative to ix0) where all three edge functions can be >= 0; widened by one pixel and re-tested below
+        int lo = 0, hi = ix1 - ix0;
+        const float eA[3] = {A0, A1, A2}, eE[3] = {e0, e1, e2};
+        bool empty = false;
+        for (int k = 0; k < 3; k++) {
+            if (eA[k] > 0) {
+                float t = floorf(-eE[k] / eA[k]) - 1;
+                if (t > (float) hi + 1) { empty = true; break; }
+                if (t > (float) lo) lo = (int) t;
+            } else if (eA[k] < 0) {
+                float t = ceilf(eE[k] / -eA[k]) + 1;
+                if (t < (float) lo - 1) { empty = true; break; }
+                if (t < (float) hi) hi = (int) t;
+            } else if (eE[k] < 0) {
+                empty = true;
+                break;
             }
+        }
+        if (empty || lo > hi) continue;
+        float base[14];
+        {
+            float w0 = (e0 + A0 * (float) lo) * inv, w1 = (e1 + A1 * (float) lo) * inv, w2 = (e2 + A2 * (float) lo) * inv;
+            for (int q = 0; q < na; q++) base[q] = w0 * v0[q] + w1 * v1[q] + w2 * v2[q];
+        }
+        for (int xr = lo; xr <= hi; xr++) {
+            float f = (float) xr;
+            if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
+            int x = ix0 + xr;
+            int idx = y * XRASTER_W + x;
+            float at[14];
+            float dxs = (float) (xr - lo);
+            for (int q = 0; q < na; q++) at[q] = base[q] + g[q] * dxs;
+            float z = at[4];
+            if (z < 0) z = 0;
+            if (z > 16777215.0f) z = 16777215.0f;
+            if (c.zEnable && !ZTest(c.zFunc, z, g_z[idx])) continue;
+            if (!c.tev) {
+                if (c.aTest && !AlphaPass(c, at[3])) continue;
+                PlotPixel(c, idx, z, at);
+                continue;
+            }
+            float tc[4][2];
+            if (ntc) {
+                float q = at[5] != 0 ? 1.0f / at[5] : 1.0f;
+                for (int t = 0; t < ntc; t++) {
+                    tc[t][0] = at[6 + 2 * t] * q;
+                    tc[t][1] = at[7 + 2 * t] * q;
+                }
+            }
+            float out[4];
+            Tev(c, at, tc, out);
+            if (c.aTest && !AlphaPass(c, out[3])) continue;
+            PlotPixel(c, idx, z, out);
         }
     }
 }
@@ -605,7 +731,7 @@ void Line(const Ctx& c, V a, V b)
     }
 }
 
-void Draw(int prim, int, const XGpVertex* v, int count, const XGpState* st, void*)
+void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, void*)
 {
     if (!g_pix || count <= 0) return;
     Ctx c;
@@ -714,9 +840,21 @@ void CopyCmd(unsigned cmd, const XGpState* st)
     }
 }
 
+void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, void* u)
+{
+    unsigned long long t0 = g_clock ? g_clock() : 0;
+    DrawImpl(prim, a, v, count, st, u);
+    g_draws++;
+    if (g_clock) g_usDraw += g_clock() - t0;
+}
+
 void OnBp(int reg, unsigned val, const XGpState* st, void*)
 {
-    if (reg == 0x52) CopyCmd(val, st);
+    if (reg == 0x52) {
+        unsigned long long t0 = g_clock ? g_clock() : 0;
+        CopyCmd(val, st);
+        if (g_clock) g_usCopy += g_clock() - t0;
+    }
 }
 
 XGpBackend g_be = {Draw, OnBp, 0, 0, 0};
@@ -748,3 +886,9 @@ extern "C" unsigned XRaster_CopySerial(void) { return g_copySerial; }
 extern "C" const unsigned* XRaster_Pixels(void) { return g_pix; }
 extern "C" const float* XRaster_Depth(void) { return g_z; }
 extern "C" unsigned long long XRaster_Triangles(void) { return g_tris; }
+extern "C" void XRaster_SetClock(unsigned long long (*us)(void)) { g_clock = us; }
+extern "C" void XRaster_Stats(unsigned long long* usDraw, unsigned long long* usCopy, unsigned long long* px, unsigned long long* tris,
+                              unsigned long long* draws)
+{
+    *usDraw = g_usDraw; *usCopy = g_usCopy; *px = g_px; *tris = g_tris; *draws = g_draws;
+}

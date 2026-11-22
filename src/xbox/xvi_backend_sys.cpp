@@ -367,8 +367,17 @@ static void BlitXfb(const unsigned char* xfb, int w, int h)
 
 #ifdef RE4_DEBUGSCREEN
 // Two status lines over the bottom of the game picture (the game covers the text trace): pad state and card state.
+static unsigned long long s_usBlit;
 static void DrawHud(void)
 {
+    static unsigned long long pUsD, pUsC, pPx, pTr, pDr, pT;
+    unsigned long long usD, usC, px, tr, dr, now = XViBackend_NowUs();
+    XRaster_Stats(&usD, &usC, &px, &tr, &dr);
+    char l3[64], l4[64];
+    snprintf(l3, sizeof(l3), "frame %ums draw %ums copy %ums blit %ums   ", (unsigned) ((now - pT) / 1000), (unsigned) ((usD - pUsD) / 1000),
+             (unsigned) ((usC - pUsC) / 1000), (unsigned) (s_usBlit / 1000));
+    snprintf(l4, sizeof(l4), "dr%u tri%u px%u   ", (unsigned) (dr - pDr), (unsigned) (tr - pTr), (unsigned) (px - pPx));
+    pUsD = usD; pUsC = usC; pPx = px; pTr = tr; pDr = dr; pT = now;
     unsigned reads, btn, anyBtn;
     int ok, err, lx, ly;
     char l1[64], l2[64];
@@ -376,10 +385,14 @@ static void DrawHud(void)
     snprintf(l1, sizeof(l1), "pad rd%u ok%d e%d b%04x any%04x %d,%d  ", reads, ok, err, btn, anyBtn, lx, ly);
     snprintf(l2, sizeof(l2), "card %08x fr%u blit%u  ", s_cardStatus, (unsigned) s_dbgPresents, (unsigned) s_dbgBlits);
     Lock();
-    debugMoveCursor(24, 400);
+    debugMoveCursor(24, 352);
     debugPrint("%s", l1);
-    debugMoveCursor(24, 420);
+    debugMoveCursor(24, 372);
     debugPrint("%s", l2);
+    debugMoveCursor(24, 392);
+    debugPrint("%s", l3);
+    debugMoveCursor(24, 412);
+    debugPrint("%s", l4);
     debugResetCursor();
     Unlock();
 }
@@ -401,7 +414,9 @@ void XViBackend_Present(const void* fb, int black, int w, int h)
         s_shownFb = fb;
         if (XRaster_CopySerial()) {
             s_dbgBlits++;
+            unsigned long long t0 = XViBackend_NowUs();
             BlitXfb((const unsigned char*) fb, w, h);
+            s_usBlit = XViBackend_NowUs() - t0;
             DrawHud();
         }
     }

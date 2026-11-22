@@ -26,6 +26,9 @@ void XRaster_Clear(unsigned argb, float z24);             // z24: depth in the 2
 const unsigned* XRaster_Pixels(void);                     // XRASTER_W * XRASTER_H, 0xAARRGGBB
 const float* XRaster_Depth(void);
 unsigned XRaster_CopySerial(void);                        // counts EFB -> XFB copies (GXCopyDisp), so a presenter knows when the XFB changed
+void XRaster_SetClock(unsigned long long (*us)(void));    // optional microsecond clock for the statistics below
+void XRaster_Stats(unsigned long long* usDraw, unsigned long long* usCopy, unsigned long long* px, unsigned long long* tris,
+                   unsigned long long* draws);       // totals since the start: draw / copy time, pixels written, triangles, draw calls
 unsigned long long XRaster_Triangles(void);               // triangles that reached the pixel stage (statistics)
 
 #ifdef __cplusplus

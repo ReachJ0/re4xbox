@@ -405,6 +405,35 @@ static void TestTextures(unsigned char* mem)
     GXFlush();
 }
 
+#include <time.h>
+static double Now() { timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000.0 + t.tv_nsec / 1e6; }
+
+// RASTER_BENCH=1: milliseconds for the heavy parts of one game frame (the console runs it on a much slower CPU)
+static void Bench(unsigned char* mem)
+{
+    unsigned char* t = mem + 0x200000;
+    memset(t, 0x55, 64 * 1024);
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    double a = Now();
+    UseTex(t, 4, 4, GX_TF_RGBA8, GX_MODULATE);
+    for (int i = 0; i < 5; i++) TexQuad(255, 255, 255, 255);
+    double b = Now();
+    printf("bench: textured RGBA8 nearest quad 400x400:  %.2f ms\n", (b - a) / 5);
+    UseTex(t, 256, 256, GX_TF_CMPR, GX_MODULATE);
+    for (int i = 0; i < 5; i++) TexQuad(255, 255, 255, 255);
+    printf("bench: textured CMPR 256x256 nearest quad:   %.2f ms\n", (Now() - b) / 5);
+    GXSetNumTexGens(0);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    GXFlush();
+    b = Now();
+    for (int i = 0; i < 5; i++) TexQuad(255, 255, 255, 255);
+    printf("bench: vertex colour quad 400x400 (TEV):     %.2f ms\n", (Now() - b) / 5);
+    b = Now();
+    for (int i = 0; i < 5; i++) { GXSetCopyClear(GXColor{0, 0, 0, 255}, 0xFFFFFF); GXCopyDisp(mem + 0x300000, GX_TRUE); GXFlush(); }
+    printf("bench: GXCopyDisp 640x480 with clear:        %.2f ms\n", (Now() - b) / 5);
+}
+
 int main()
 {
     void* want = (void*) (uintptr_t) XMEM_WANTED_BASE;
@@ -423,6 +452,7 @@ int main()
     TestLinesPoints();
     TestCopyDisp((unsigned char*) blk);
     TestTextures((unsigned char*) blk);
+    if (getenv("RASTER_BENCH")) Bench((unsigned char*) blk);
     printf("raster: %d checks, %d failures, %llu triangles\n", g_checks, g_fails, XRaster_Triangles());
     return g_fails != 0;
 }
