@@ -44,6 +44,8 @@ static void Log(const char* fmt, ...)
     va_end(ap);
 }
 
+extern "C" const char XBuildId[];
+
 static void Both(const char* fmt, ...)   // screen + file
 {
     char b[256];
@@ -128,7 +130,7 @@ Hook(unsigned code, unsigned p1, unsigned p2, unsigned p3, unsigned p4)
         const char* l = XTrace_Line(i);
         if (l[0]) Both(" %s\n", l);
     }
-    Both("full log: E:\\re4crash.log\n");
+    Both("build %s   full log: E:\\re4crash.log\n", XBuildId);
     Both("map: python3 tools/xbox/addr2sym.py xbox/main.map\n");
     if (g_log) { fclose(g_log); g_log = 0; }
     for (;;) __asm__ volatile("cli; hlt");

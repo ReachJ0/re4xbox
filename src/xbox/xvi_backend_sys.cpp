@@ -101,6 +101,7 @@ extern "C" void XSub_Convert(void* data, unsigned len)
     XTrace_Add(s_subInfo);
 }
 
+extern "C" const char XBuildId[];
 extern "C" void XPad_Dbg(unsigned*, int*, int*, unsigned*, unsigned*, int*, int*);
 
 // Sanity check of a message table before MessageData dereferences it; the first failure is kept for the heartbeat.
@@ -386,7 +387,7 @@ static void DrawHud(void)
     char l1[64], l2[64];
     XPad_Dbg(&reads, &ok, &err, &btn, &anyBtn, &lx, &ly);
     snprintf(l1, sizeof(l1), "pad rd%u ok%d e%d b%04x any%04x %d,%d  ", reads, ok, err, btn, anyBtn, lx, ly);
-    snprintf(l2, sizeof(l2), "card %08x fr%u blit%u  ", s_cardStatus, (unsigned) s_dbgPresents, (unsigned) s_dbgBlits);
+    snprintf(l2, sizeof(l2), "card %08x fr%u blit%u build %s  ", s_cardStatus, (unsigned) s_dbgPresents, (unsigned) s_dbgBlits, XBuildId);
     Lock();
     debugMoveCursor(24, 352);
     debugPrint("%s", l1);

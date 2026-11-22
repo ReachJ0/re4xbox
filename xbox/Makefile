@@ -15,8 +15,12 @@ LAYERS := audio_stubs chp_xbox gp_xbox xraster gx_xbox vi_xbox xvi_backend_sys a
 SDK_C  := GXAttr GXBump GXDisplayList GXDraw GXFifo GXFrameBuf GXGeometry GXInit GXLight GXMisc GXPerf GXPixel GXTev GXTexture GXTransform texPalette fileCache OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
 
 GEN_C := mtx mtxvec mtx44 mtx44vec vec quat
+
+# build identifier shown by the development HUD (short git hash, + when the tree has uncommitted changes); the file is only
+# rewritten when it changes, so its object is rebuilt exactly then
+$(shell mkdir -p $(CURDIR)/gen; printf 'const char XBuildId[] = "%s";\n' "$$(git -C $(RE4) rev-parse --short HEAD 2>/dev/null || echo nogit)$$(git -C $(RE4) diff --quiet HEAD 2>/dev/null || echo +)" > $(CURDIR)/gen/xbuildid.c.new; cmp -s $(CURDIR)/gen/xbuildid.c.new $(CURDIR)/gen/xbuildid.c || mv $(CURDIR)/gen/xbuildid.c.new $(CURDIR)/gen/xbuildid.c; rm -f $(CURDIR)/gen/xbuildid.c.new)
 GAME := $(filter-out memset_2 yz2asm,$(basename $(notdir $(wildcard $(RE4)/src/game/*.cpp))))
-SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))) $(RE4)/src/xbox/native_asm.cpp $(RE4)/src/xbox/dev_stubs.cpp $(addprefix $(CURDIR)/gen/,$(addsuffix .c,$(GEN_C))) \
+SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))) $(RE4)/src/xbox/native_asm.cpp $(RE4)/src/xbox/dev_stubs.cpp $(addprefix $(CURDIR)/gen/,$(addsuffix .c,$(GEN_C))) $(CURDIR)/gen/xbuildid.c \
        $(addprefix $(RE4)/src/xbox/,$(addsuffix .cpp,$(LAYERS))) \
        $(addprefix $(RE4)/src/lib/,$(addsuffix .c,$(SDK_C)))
 
