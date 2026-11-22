@@ -100,6 +100,13 @@ static void Frame(int zEnable = 0, GXCompare fn = GX_ALWAYS)
     GXSetCullMode(GX_CULL_NONE);
     GXSetZMode(zEnable, fn, 1);
     GXSetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    GXSetNumChans(1);
+    GXSetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_VTX, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
+    GXSetNumTexGens(0);
+    GXSetNumTevStages(1);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GXFlush();
 }
 
@@ -290,6 +297,114 @@ static void TestCopyDisp(unsigned char* blk)
     GXSetDispCopyYScale(1.0f);
 }
 
+// ---- textures and TEV ----
+static void TFmt()
+{
+    GXClearVtxDesc();
+    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+}
+
+// full-screen-ish quad (100,100)-(500,500) showing the whole texture, vertex colour (r,g,b,a)
+static void TexQuad(int r, int g, int b, int a)
+{
+    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+    GXPosition3f32(100, 100, -1); GXColor4u8(r, g, b, a); GXTexCoord2f32(0, 0);
+    GXPosition3f32(500, 100, -1); GXColor4u8(r, g, b, a); GXTexCoord2f32(1, 0);
+    GXPosition3f32(500, 500, -1); GXColor4u8(r, g, b, a); GXTexCoord2f32(1, 1);
+    GXPosition3f32(100, 500, -1); GXColor4u8(r, g, b, a); GXTexCoord2f32(0, 1);
+    GXEnd();
+    GXFlush();
+}
+
+static void UseTex(void* data, int w, int h, GXTexFmt fmt, GXTevMode mode)
+{
+    // the SDK keeps a 32 byte object on the console (32 bit pointers); on a 64 bit host its internal struct is 40 bytes
+    static unsigned long long objbuf[8];
+    GXTexObj& obj = *(GXTexObj*) objbuf;
+    GXInitTexObj(&obj, data, w, h, fmt, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GXInitTexObjLOD(&obj, GX_NEAR, GX_NEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    GXLoadTexObj(&obj, GX_TEXMAP0);
+    GXSetNumTexGens(1);
+    GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    GXSetTevOp(GX_TEVSTAGE0, mode);
+    GXFlush();
+}
+
+static void TestTextures(unsigned char* mem)
+{
+    unsigned char* t = mem + 0x200000;   // 32-byte aligned texture data in game memory
+    Frame();
+    Ortho(0.1f, 10); Ident(); TFmt();
+
+    // RGBA8 4x4: one block, AR bytes then GB bytes; texel (x,y): R = 60*x, G = 60*y, B = 7, A = 255 - 10*x
+    memset(t, 0, 64);
+    for (int y = 0; y < 4; y++)
+        for (int x = 0; x < 4; x++) {
+            int k = (y * 4 + x) * 2;
+            t[k] = 255 - 10 * x; t[k + 1] = 60 * x; t[32 + k] = 60 * y; t[32 + k + 1] = 7;
+        }
+    UseTex(t, 4, 4, GX_TF_RGBA8, GX_REPLACE);
+    TexQuad(255, 255, 255, 255);
+    CHECK(Near(R(Px(150, 150)), 0, 1) && Near(G(Px(150, 150)), 0, 1) && Near(B(Px(150, 150)), 7, 1));
+    CHECK(Near(R(Px(250, 150)), 60, 1) && Near(G(Px(250, 150)), 0, 1));
+    CHECK(Near(R(Px(450, 150)), 180, 1) && Near(G(Px(450, 350)), 120, 1) && Near(G(Px(150, 450)), 180, 1));
+    Dump("tex_rgba8");
+
+    // MODULATE: texel * vertex colour / 255
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    UseTex(t, 4, 4, GX_TF_RGBA8, GX_MODULATE);
+    TexQuad(128, 255, 255, 255);
+    CHECK(Near(R(Px(450, 150)), 90, 2) && Near(B(Px(450, 150)), 7, 1));
+
+    // I8 8x4, texel (x,y) = 30*x + y
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    for (int y = 0; y < 4; y++)
+        for (int x = 0; x < 8; x++) t[y * 8 + x] = (unsigned char) (30 * x + y);
+    UseTex(t, 8, 4, GX_TF_I8, GX_REPLACE);
+    TexQuad(255, 255, 255, 255);
+    CHECK(Near(R(Px(125, 150)), 0, 1) && Near(R(Px(475, 150)), 210, 1) && Near(R(Px(125, 450)), 3, 1) && Near(G(Px(275, 250)), 91, 1));
+
+    // IA8 4x4 with alpha test: alpha 0 texels must not be drawn
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    for (int y = 0; y < 4; y++)
+        for (int x = 0; x < 4; x++) { t[(y * 4 + x) * 2] = (x & 1) ? 255 : 0; t[(y * 4 + x) * 2 + 1] = 200; }
+    UseTex(t, 4, 4, GX_TF_IA8, GX_REPLACE);
+    GXSetAlphaCompare(GX_GREATER, 128, GX_AOP_AND, GX_ALWAYS, 0);
+    GXFlush();
+    TexQuad(255, 255, 255, 255);
+    CHECK(Px(150, 150) == 0xFF000000u && R(Px(250, 150)) == 200 && Px(350, 350) == 0xFF000000u && R(Px(450, 350)) == 200);
+
+    // CMPR 8x8: four 4x4 blocks with the same data: colour 0 red, colour 1 blue, one row of each index
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    memset(t, 0, 32);
+    for (int b = 0; b < 4; b++) {
+        unsigned char* q = t + b * 8;
+        q[0] = 0xF8; q[1] = 0x00; q[2] = 0x00; q[3] = 0x1F;
+        q[4] = 0x00; q[5] = 0x55; q[6] = 0xAA; q[7] = 0xFF;
+    }
+    UseTex(t, 8, 8, GX_TF_CMPR, GX_REPLACE);
+    TexQuad(255, 255, 255, 255);
+    CHECK(R(Px(120, 120)) == 255 && B(Px(120, 120)) == 0);                       // row 0: colour 0
+    CHECK(R(Px(120, 170)) == 0 && B(Px(120, 170)) == 255);                       // row 1: colour 1
+    CHECK(Near(R(Px(120, 220)), 170, 2) && Near(B(Px(120, 220)), 85, 2));        // row 2: 2/3 c0 + 1/3 c1
+    CHECK(Near(R(Px(120, 270)), 85, 2) && Near(B(Px(120, 270)), 170, 2));        // row 3
+    CHECK(R(Px(420, 320)) == 255);                                               // second sub-block row 4 (index 0)
+    Dump("tex_cmpr");
+
+    // restore the plain vertex-colour state for anything after this
+    GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    GXSetNumTexGens(0);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    GXFlush();
+}
+
 int main()
 {
     void* want = (void*) (uintptr_t) XMEM_WANTED_BASE;
@@ -307,6 +422,7 @@ int main()
     TestPerspectiveAndClip();
     TestLinesPoints();
     TestCopyDisp((unsigned char*) blk);
+    TestTextures((unsigned char*) blk);
     printf("raster: %d checks, %d failures, %llu triangles\n", g_checks, g_fails, XRaster_Triangles());
     return g_fails != 0;
 }

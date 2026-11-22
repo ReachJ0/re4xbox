@@ -3,6 +3,30 @@
 
 #include "__gx.h"
 
+#ifdef RE4_XBOX
+// The tables below are bitfield structs read back as u32; CodeWarrior fills bitfields from the most significant bit,
+// the Xbox compiler from the least significant one. Same values packed explicitly (first field in the top bits).
+#define TEVC(rid, dest, shift, clamp, sub, bias, a, b, c, d) \
+    ((u32) (((rid) << 24) | ((dest) << 22) | ((shift) << 20) | ((clamp) << 19) | ((sub) << 18) | ((bias) << 16) | ((a) << 12) | ((b) << 8) | ((c) << 4) | (d)))
+#define TEVA(rid, dest, shift, clamp, sub, bias, a, b, c, d, swap, mode) \
+    ((u32) (((rid) << 24) | ((dest) << 22) | ((shift) << 20) | ((clamp) << 19) | ((sub) << 18) | ((bias) << 16) | ((a) << 13) | ((b) << 10) | ((c) << 7) | ((d) << 4) | ((swap) << 2) | (mode)))
+static const u32 TEVCOpTableST0[5] = {
+    TEVC(192, 0, 0, 1, 0, 0, 15, 8, 10, 15), TEVC(192, 0, 0, 1, 0, 0, 10, 8, 9, 15), TEVC(192, 0, 0, 1, 0, 0, 10, 12, 8, 15),
+    TEVC(192, 0, 0, 1, 0, 0, 15, 15, 15, 8), TEVC(192, 0, 0, 1, 0, 0, 15, 15, 15, 10),
+};
+static const u32 TEVCOpTableST1[5] = {
+    TEVC(192, 0, 0, 1, 0, 0, 15, 8, 0, 15), TEVC(192, 0, 0, 1, 0, 0, 0, 8, 9, 15), TEVC(192, 0, 0, 1, 0, 0, 0, 12, 8, 15),
+    TEVC(192, 0, 0, 1, 0, 0, 15, 15, 15, 8), TEVC(192, 0, 0, 1, 0, 0, 15, 15, 15, 0),
+};
+static const u32 TEVAOpTableST0[5] = {
+    TEVA(193, 0, 0, 1, 0, 0, 7, 4, 5, 7, 0, 0), TEVA(193, 0, 0, 1, 0, 0, 7, 7, 7, 5, 0, 0), TEVA(193, 0, 0, 1, 0, 0, 7, 4, 5, 7, 0, 0),
+    TEVA(193, 0, 0, 1, 0, 0, 7, 7, 7, 4, 0, 0), TEVA(193, 0, 0, 1, 0, 0, 7, 7, 7, 5, 0, 0),
+};
+static const u32 TEVAOpTableST1[5] = {
+    TEVA(193, 0, 0, 1, 0, 0, 7, 4, 0, 7, 0, 0), TEVA(193, 0, 0, 1, 0, 0, 7, 7, 7, 0, 0, 0), TEVA(193, 0, 0, 1, 0, 0, 7, 4, 0, 7, 0, 0),
+    TEVA(193, 0, 0, 1, 0, 0, 7, 7, 7, 4, 0, 0), TEVA(193, 0, 0, 1, 0, 0, 7, 7, 7, 0, 0, 0),
+};
+#else
 static struct {
     u32 rid : 8;
     u32 dest : 2;
@@ -82,6 +106,8 @@ static struct {
     {193, 0, 0, 1, 0, 0, 7, 7, 7, 4, 0, 0},  // replace
     {193, 0, 0, 1, 0, 0, 7, 7, 7, 0, 0, 0},  // passclr
 };
+
+#endif
 
 #define SOME_SET_REG_MACRO(reg, size, shift, val)                                                   \
 	do {                                                                                            \
