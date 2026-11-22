@@ -173,7 +173,7 @@ void titleWait(TITLE_WORK* w)
             pG->nPrim = 0x20000;
             primInit();
             IdTexRoomInit();
-            IdSys.roomInit();
+            IdSys.roomInit(); XIDARC(w->pIdDat, 0x1010, 0x2FC0)
             IdTexDataLoad(TITLE_ARC_PTR(w->pIdDat, 4), TEX_OWNER_ID_TITLE);
             {
                 register u8 z RE4_REGPIN("r11");  // COMPILER-DIFF: #13 (REG_EQUIV zero reloaded into r11)
@@ -887,7 +887,7 @@ void titleSub(TITLE_WORK* w)
         break;
     case 1:
         if (Dvd.ReadCheck(w->req, &w->data_size, 0, (void**) &w->pOmk) != 0) {
-            omk_addr = w->pOmk;
+            omk_addr = w->pOmk; XIDARC(w->pOmk, 0x10, 0x1E0)
             w->Rno1++;
         }
         break;
