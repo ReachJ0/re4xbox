@@ -101,6 +101,8 @@ extern "C" void XSub_Convert(void* data, unsigned len)
     XTrace_Add(s_subInfo);
 }
 
+extern "C" void XPad_Dbg(unsigned*, int*, int*, unsigned*, unsigned*, int*, int*);
+
 // Sanity check of a message table before MessageData dereferences it; the first failure is kept for the heartbeat.
 static char s_mesChk[128];
 extern "C" int XMes_Check(const void* tbl, unsigned lang, int type)
@@ -176,6 +178,13 @@ void XTrace_Beat(int frame)
     XTrace_Add(t);
     snprintf(t, sizeof(t), "card st%08x m%d r%d.%d.%d\n", s_cardStatus, s_card[0], s_card[1], s_card[2], s_card[3]);
     XTrace_Add(t);
+    {
+        unsigned reads, btn, anyBtn;
+        int ok, err, lx, ly;
+        XPad_Dbg(&reads, &ok, &err, &btn, &anyBtn, &lx, &ly);
+        snprintf(t, sizeof(t), "pad rd%u ok%d err%d btn%04x any%04x l%d,%d\n", reads, ok, err, btn, anyBtn, lx, ly);
+        XTrace_Add(t);
+    }
 }
 
 void XTrace_Val4(const char* label, int a, int b, int c, int d)
@@ -356,6 +365,26 @@ static void BlitXfb(const unsigned char* xfb, int w, int h)
 }
 #endif
 
+#ifdef RE4_DEBUGSCREEN
+// Two status lines over the bottom of the game picture (the game covers the text trace): pad state and card state.
+static void DrawHud(void)
+{
+    unsigned reads, btn, anyBtn;
+    int ok, err, lx, ly;
+    char l1[64], l2[64];
+    XPad_Dbg(&reads, &ok, &err, &btn, &anyBtn, &lx, &ly);
+    snprintf(l1, sizeof(l1), "pad rd%u ok%d e%d b%04x any%04x %d,%d  ", reads, ok, err, btn, anyBtn, lx, ly);
+    snprintf(l2, sizeof(l2), "card %08x fr%u blit%u  ", s_cardStatus, (unsigned) s_dbgPresents, (unsigned) s_dbgBlits);
+    Lock();
+    debugMoveCursor(24, 400);
+    debugPrint("%s", l1);
+    debugMoveCursor(24, 420);
+    debugPrint("%s", l2);
+    debugResetCursor();
+    Unlock();
+}
+#endif
+
 void XViBackend_Present(const void* fb, int black, int w, int h)
 {
     char status[96];
@@ -373,6 +402,7 @@ void XViBackend_Present(const void* fb, int black, int w, int h)
         if (XRaster_CopySerial()) {
             s_dbgBlits++;
             BlitXfb((const unsigned char*) fb, w, h);
+            DrawHud();
         }
     }
 #else

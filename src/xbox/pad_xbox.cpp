@@ -59,6 +59,9 @@ static const ButtonMap kButtonMap[] = {
 
 static int s_backendOk = 0;
 static u32 s_analogMode = 0;
+// development heartbeat: what the game last got for port 0 (see XTrace_Beat)
+static unsigned s_dbgReads, s_dbgBtn, s_dbgAnyBtn;
+static int s_dbgErr = -99, s_dbgLx, s_dbgLy;
 static u8 s_motorCmd[XPAD_MAX];  // last command sent per port, so the backend is only touched on change
 
 static inline int Clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -75,6 +78,11 @@ static void SetNoController(PADStatus* st, int err)
 }
 
 extern "C" {
+
+void XPad_Dbg(unsigned* reads, int* ok, int* err, unsigned* btn, unsigned* anyBtn, int* lx, int* ly)
+{
+    *reads = s_dbgReads; *ok = s_backendOk; *err = s_dbgErr; *btn = s_dbgBtn; *anyBtn = s_dbgAnyBtn; *lx = s_dbgLx; *ly = s_dbgLy;
+}
 
 void PADInit()
 {
@@ -121,6 +129,10 @@ u32 PADRead(PADStatus* status)
         size_t i;
 
         if (!s_backendOk || !XPadBackend_Read(chan, &raw)) {
+            if (chan == 0) {
+                s_dbgReads++;
+                s_dbgErr = -1;
+            }
             SetNoController(status, PAD_ERR_NO_CONTROLLER);
             continue;
         }
@@ -144,6 +156,14 @@ u32 PADRead(PADStatus* status)
             buttons |= JOY_R;
         }
         status->button = buttons;
+        if (chan == 0) {
+            s_dbgReads++;
+            s_dbgErr = 0;
+            s_dbgBtn = buttons;
+            s_dbgAnyBtn |= buttons;
+            s_dbgLx = status->stickX;
+            s_dbgLy = status->stickY;
+        }
         status->analogA = 0;
         status->analogB = 0;
         status->pad_B = 0;
