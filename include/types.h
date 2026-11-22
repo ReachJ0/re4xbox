@@ -55,11 +55,16 @@ int XMes_Check(const void* tbl, unsigned lang, int type);
 }
 #endif
 #define XMESCHK(tbl, lang, type, ret) if (!XMes_Check((tbl), (lang), (type))) return ret;
+#include "xbox/xdataext.h"
+#define XGETEXT_NUM(h, n) XDataExt_Num(h)
+#define XGETEXT_BLK(arc, i, tag, expr) XDataExt_Block((void*) (arc), (i), (tag), XTrace_Add)
 #else
 #define SPIN_VSYNC(cond) while (cond) {}
 #define XFRM_DECL
 #define XSUBDATA(adr, len)
 #define XMESCHK(tbl, lang, type, ret)
+#define XGETEXT_NUM(h, n) (n)
+#define XGETEXT_BLK(arc, i, tag, expr) (expr)
 #define XMARK(n)
 #define XCARD_TRACE(a, b, c, d)
 #define XFRM(txt)

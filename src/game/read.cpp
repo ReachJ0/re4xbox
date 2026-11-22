@@ -1030,7 +1030,7 @@ void* GetDataExt(void* pData, const char* pName, int no)
         pLog->err(0, 0, "GetDataExt() NULL POINTER %08x %08x", pData, pName);
         return NULL;
     }
-    num = h->num;
+    num = XGETEXT_NUM(h, h->num);
     cnt = 0;
     // tag table follows the offsets; p starts one entry early, the loop pre-increments (lbzu)
     p = (u8*) pData + num * 4;
@@ -1039,7 +1039,7 @@ void* GetDataExt(void* pData, const char* pName, int no)
         p += 4;
         if (p[0] == pName[0] && p[1] == pName[1] && p[2] == pName[2]) {
             if (cnt == no) {
-                return (void*) (*(u32*) (i * 4 + (u32) pData + 0x10) + (u32) pData);
+                return XGETEXT_BLK(pData, i, pName, (void*) (*(u32*) (i * 4 + (u32) pData + 0x10) + (u32) pData));
             }
             cnt++;
         }
