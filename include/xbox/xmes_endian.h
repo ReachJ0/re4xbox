@@ -17,6 +17,7 @@ int XMes_Swap(void* data, unsigned len);
 // First rejected file: [0] reason (1 too short, 2 bad first offset, 3 too many languages, 4 bad block offset, 5 bad
 // count), [1] length, [2..5] its first four words. Shown by the development heartbeat; all zero if nothing failed.
 extern unsigned XMes_Diag[6];
+extern unsigned XMes_Patched;   // phrases rewritten ("Memory Card" -> "Disc Drive") while converting
 
 #ifdef __cplusplus
 }

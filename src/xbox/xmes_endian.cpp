@@ -98,6 +98,31 @@ unsigned Plan(const unsigned char* d, unsigned len, Block* b, int* nb)
 
 }  // namespace
 
+unsigned XMes_Patched;
+
+// Replaces the phrase "Memory Card" with "Disc Drive " (same length, so no offset changes) in a converted text run. The
+// words are font glyph indices; the phrase is only accepted when its nine letters share one constant offset from ASCII (the
+// font is in ASCII order), and the new letters are derived from that same offset, so a text in any other encoding is left alone.
+static void PatchPhrase(unsigned short* t, unsigned n)
+{
+    static const char from[] = "Memory Card";
+    static const char to[] = "Disc Drive";
+    for (unsigned i = 0; i + 11 <= n; i++) {
+        int d = (int) t[i] - 'M';
+        bool ok = t[i] >= 0x80;
+        for (int j = 1; j < 11 && ok; j++) {
+            if (j == 6) continue;
+            ok = t[i + j] >= 0x80 && (int) t[i + j] - from[j] == d;
+        }
+        if (!ok) continue;
+        unsigned short space = t[i + 6];
+        for (int j = 0; j < 10; j++) t[i + j] = to[j] == ' ' ? space : (unsigned short) (to[j] + d);
+        t[i + 10] = space;
+        XMes_Patched++;
+        i += 10;
+    }
+}
+
 extern "C" int XMes_Swap(void* data, unsigned len)
 {
     unsigned char* d = (unsigned char*) data;
@@ -118,6 +143,7 @@ extern "C" int XMes_Swap(void* data, unsigned len)
         for (unsigned k = 0; k < n; k++) {
             XSwap_16(t + k * 2);
         }
+        PatchPhrase((unsigned short*) t, n);
     }
     for (unsigned i = 0; i < words; i++) {
         XSwap_32(d + i * 4);

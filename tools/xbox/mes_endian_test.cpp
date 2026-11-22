@@ -21,11 +21,40 @@ static unsigned Make(unsigned char* d)
     return 0x40;
 }
 
+// "Memory Card" -> "Disc Drive ": a table with one language block whose text holds the phrase (glyph = ASCII + 0x60) and,
+// in a second text, the same words in a scrambled encoding that must stay as it is.
+static void TestPhrase()
+{
+    unsigned char b[0x100];
+    memset(b, 0, sizeof(b));
+    P32(b, 1); P32(b + 4, 8);                 // one language, block at 8
+    unsigned char* blk = b + 8;
+    P32(blk, 0xAABBCCDD); P32(blk + 4, 2); P32(blk + 8, 0x10); P32(blk + 12, 0x10 + 2 * 14);
+    const char* ph = "Memory Card";
+    int pos = 0x10;
+    P16(blk + pos, 0x0000); pos += 0;         // (message 0 starts here)
+    for (int i = 0; ph[i]; i++) { P16(blk + pos, ph[i] == ' ' ? 0x00A0 : (unsigned) ph[i] + 0x60); pos += 2; }
+    P16(blk + pos, 0x0000); pos += 2;         // 12 words so far; message 1 follows
+    unsigned m1 = (unsigned) pos;
+    for (int i = 0; ph[i]; i++) { P16(blk + pos, ph[i] == ' ' ? 0x00A0 : 0x0090 + (unsigned) (i * i % 7) + (i & 1) * 0x11); pos += 2; }
+    P16(blk + pos, 0x0000); pos += 2;
+    P32(blk + 12, m1);
+    unsigned total = 8 + (unsigned) pos;
+    CHECK(XMes_Swap(b, total) == 1);
+    const uint16_t* t0 = (const uint16_t*) (blk + 0x10);
+    const char* want = "Disc Drive";
+    for (int i = 0; i < 10; i++) CHECK(t0[i] == (want[i] == ' ' ? 0x00A0 : (unsigned) want[i] + 0x60));
+    CHECK(t0[10] == 0x00A0 && XMes_Patched == 1);
+    const uint16_t* t1 = (const uint16_t*) (blk + m1);
+    CHECK(t1[0] == 0x0090 + 0 && t1[1] == 0x0090 + 1 + 0x11);   // second text untouched
+}
+
 int main()
 {
     unsigned char d[0x40] = {0}, orig[0x40];
     unsigned n = Make(d);
     memcpy(orig, d, n);
+    TestPhrase();
     CHECK(XMes_Swap(d, n) == 2);
     uint32_t* t = (uint32_t*) d;
     CHECK(t[0] == 3 && t[1] == 0x10 && t[2] == 0x30 && t[3] == 0x30);
