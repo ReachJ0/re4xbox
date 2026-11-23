@@ -336,6 +336,8 @@ static void UseTex(void* data, int w, int h, GXTexFmt fmt, GXTevMode mode)
     GXFlush();
 }
 
+static unsigned char* mem_for_copy(unsigned char* t) { return t + 0x40000; }
+
 static void TestTextures(unsigned char* mem)
 {
     unsigned char* t = mem + 0x200000;   // 32-byte aligned texture data in game memory
@@ -431,6 +433,32 @@ static void TestTextures(unsigned char* mem)
         GXFlush();
         TexQuad(255, 255, 255, 255);
         CHECK(G(Px(100, 150)) == 255 && R(Px(100, 150)) == 0);
+    }
+
+    // GXCopyTex: the EFB region lands in the tiled texture layout (RGBA8 block = 4x4 texels, AR bytes then GB bytes), also halved
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    UseTex(t, 8, 4, GX_TF_I8, GX_REPLACE);
+    TexQuad(255, 255, 255, 255);
+    {
+        unsigned char* d = mem_for_copy(t);
+        GXSetTexCopySrc(100, 100, 64, 64);
+        GXSetTexCopyDst(64, 64, GX_TF_RGBA8, GX_FALSE);
+        GXCopyTex(d, GX_FALSE);
+        GXFlush();
+        // texel (5,6) is in block (1,1), position (1,2) inside it
+        unsigned char* blk = d + ((1 * 16 + 1) * 64);
+        int k = (2 * 4 + 1) * 2;
+        unsigned px = Px(105, 106);
+        CHECK(R(px) != 0 || G(px) != 0);
+        CHECK(blk[k + 1] == R(px) && blk[32 + k] == G(px) && blk[32 + k + 1] == B(px));
+        CHECK(blk[k] == (px >> 24));
+        GXSetTexCopyDst(32, 32, GX_TF_I8, GX_TRUE);
+        GXCopyTex(d, GX_FALSE);
+        GXFlush();
+        // 32x32 I8 texels in 8x4 blocks (4 blocks per row of 32): texel (3,2) = average of EFB (6..7, 4..5), luminance
+        unsigned lum = 0;
+        for (int q = 0; q < 4; q++) { unsigned p = Px(106 + (q & 1), 104 + (q >> 1)); lum += (R(p) * 77 + G(p) * 150 + B(p) * 29) >> 8; }
+        CHECK(Near(d[(0 * 4 + 0) * 32 + 2 * 8 + 3], (int) (lum / 4), 2));
     }
 
     // draw capture: with a clock that makes every draw look slow, the next draw is written to a file the replay tool reads

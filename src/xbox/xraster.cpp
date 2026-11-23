@@ -1023,11 +1023,88 @@ inline void Yuv(unsigned argb, int* y, int* u, int* v)
     *v = (112 * r - 94 * g - 18 * b + 128) / 256 + 128;
 }
 
-// BP 0x52 (copy command): bit 14 = copy to an XFB (else a texture, not done yet), bit 11 = clear the EFB afterwards,
+
+// EFB -> texture (GXCopyTex): the region of BP 0x49/0x4A (halved in both directions when bit 9 is set, as a box filter) is
+// written to BP 0x4B in the tiled layout the texture units read. Formats: 0 I4, 1 I8, 2 IA4, 3 IA8, 4 RGB565, 5 RGB5A3, 6 RGBA8
+// (the colour copies; depth / alpha-only / YUV copies are not done).
+void CopyTexture(unsigned cmd, const XGpState* st)
+{
+    unsigned memSize = 0;
+    unsigned char* mem = XGp_MemoryBase(&memSize);
+    unsigned fmt = ((cmd >> 4) & 7) | (((cmd >> 3) & 1) << 3);
+    if (!mem || fmt > 6 || (st->bp[0x43] & 7) == 3) return;
+    unsigned src = st->bp[0x49], size = st->bp[0x4A];
+    int x0 = (int) (src & 0x3FF), y0 = (int) ((src >> 10) & 0x3FF);
+    int w = (int) (size & 0x3FF) + 1, h = (int) ((size >> 10) & 0x3FF) + 1;
+    int half = (cmd >> 9) & 1;
+    unsigned dst = (st->bp[0x4B] & 0x1FFFFF) << 5;
+    if (x0 + w > XRASTER_W || y0 + h > XRASTER_H) return;
+    int dw = half ? w / 2 : w, dh = half ? h / 2 : h;
+    int bw = 4, bh = 4, bytes = 32;
+    if (fmt == 0) { bw = 8; bh = 8; } else if (fmt == 1 || fmt == 2) { bw = 8; bh = 4; } else if (fmt == 6) bytes = 64;
+    int bx = (dw + bw - 1) / bw, by = (dh + bh - 1) / bh;
+    if ((unsigned long long) dst + (unsigned long long) bx * by * bytes > memSize) return;
+    for (int tby = 0; tby < by; tby++)
+        for (int tbx = 0; tbx < bx; tbx++) {
+            unsigned char* blk = mem + dst + ((size_t) tby * bx + tbx) * bytes;
+            memset(blk, 0, (size_t) bytes);
+            for (int iy = 0; iy < bh; iy++)
+                for (int ix = 0; ix < bw; ix++) {
+                    int dx = tbx * bw + ix, dy = tby * bh + iy;
+                    if (dx >= dw) dx = dw - 1;
+                    if (dy >= dh) dy = dh - 1;
+                    unsigned r, g, b, a;
+                    if (half) {
+                        unsigned sr = 0, sg = 0, sb = 0, sa = 0;
+                        for (int k = 0; k < 4; k++) {
+                            unsigned p = g_pix[(y0 + dy * 2 + (k >> 1)) * XRASTER_W + x0 + dx * 2 + (k & 1)];
+                            sa += p >> 24; sr += (p >> 16) & 255; sg += (p >> 8) & 255; sb += p & 255;
+                        }
+                        a = sa / 4; r = sr / 4; g = sg / 4; b = sb / 4;
+                    } else {
+                        unsigned p = g_pix[(y0 + dy) * XRASTER_W + x0 + dx];
+                        a = p >> 24; r = (p >> 16) & 255; g = (p >> 8) & 255; b = p & 255;
+                    }
+                    unsigned lum = (r * 77 + g * 150 + b * 29) >> 8;
+                    switch (fmt) {
+                    case 0: {   // I4
+                        int idx = iy * 8 + ix;
+                        unsigned v = lum >> 4;
+                        blk[idx / 2] = (unsigned char) ((idx & 1) ? (blk[idx / 2] | v) : (v << 4));
+                        break;
+                    }
+                    case 1: blk[iy * 8 + ix] = (unsigned char) lum; break;   // I8
+                    case 2: blk[iy * 8 + ix] = (unsigned char) ((a & 0xF0) | (lum >> 4)); break;   // IA4
+                    case 3: { unsigned char* q = blk + (iy * 4 + ix) * 2; q[0] = (unsigned char) a; q[1] = (unsigned char) lum; break; }   // IA8
+                    case 4: {   // RGB565
+                        unsigned v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+                        unsigned char* q = blk + (iy * 4 + ix) * 2;
+                        q[0] = (unsigned char) (v >> 8); q[1] = (unsigned char) v;
+                        break;
+                    }
+                    case 5: {   // RGB5A3: opaque pixels as RGB555, others as A3 RGB444
+                        unsigned v = a >= 224 ? (0x8000u | ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3))
+                                              : (((a >> 5) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4));
+                        unsigned char* q = blk + (iy * 4 + ix) * 2;
+                        q[0] = (unsigned char) (v >> 8); q[1] = (unsigned char) v;
+                        break;
+                    }
+                    case 6: {   // RGBA8: AR bytes then GB bytes
+                        int k = (iy * 4 + ix) * 2;
+                        blk[k] = (unsigned char) a; blk[k + 1] = (unsigned char) r; blk[32 + k] = (unsigned char) g; blk[32 + k + 1] = (unsigned char) b;
+                        break;
+                    }
+                    }
+                }
+        }
+}
+
+// BP 0x52 (copy command): bit 14 = copy to an XFB (else a texture, CopyTexture), bit 11 = clear the EFB afterwards,
 // bit 10 = vertical scale (BP 0x4E). The XFB is YUV422 as the video encoder reads it: Y0 U Y1 V per pixel pair.
 void CopyCmd(unsigned cmd, const XGpState* st)
 {
     if (!g_pix) return;
+    if (!((cmd >> 14) & 1)) CopyTexture(cmd, st);
     if ((cmd >> 14) & 1) {
         unsigned memSize = 0;
         unsigned char* mem = XGp_MemoryBase(&memSize);
