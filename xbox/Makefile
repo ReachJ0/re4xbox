@@ -31,6 +31,8 @@ RE4_INC  = -I$(RE4)/include -I$(RE4)/src/lib
 RE4_OBJS = $(addsuffix .obj,$(basename $(SRCS)))
 $(RE4_OBJS): CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w
 $(RE4_OBJS): CXXFLAGS += $(RE4_DEFS) $(RE4_INC) -w
+# nxdk builds without -O (and with the x87 FPU); the software rasteriser is hot code of ours, so it gets optimisation and SSE floats.
+$(RE4)/src/xbox/xraster.obj: CXXFLAGS += -O2 -msse -mfpmath=sse
 
 $(CURDIR)/gen/%.c: $(RE4)/src/lib/%.c $(RE4)/tools/xbox/strip_ps.py
 	@mkdir -p $(CURDIR)/gen
