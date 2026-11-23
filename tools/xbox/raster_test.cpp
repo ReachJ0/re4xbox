@@ -437,18 +437,20 @@ static void TestTextures(unsigned char* mem)
 
     // GXCopyTex: the EFB region lands in the tiled texture layout (RGBA8 block = 4x4 texels, AR bytes then GB bytes), also halved
     Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    for (int y = 0; y < 4; y++)
+        for (int x = 0; x < 8; x++) t[y * 8 + x] = (unsigned char) (30 * x + y);
     UseTex(t, 8, 4, GX_TF_I8, GX_REPLACE);
     TexQuad(255, 255, 255, 255);
     {
         unsigned char* d = mem_for_copy(t);
-        GXSetTexCopySrc(100, 100, 64, 64);
+        GXSetTexCopySrc(300, 300, 64, 64);
         GXSetTexCopyDst(64, 64, GX_TF_RGBA8, GX_FALSE);
         GXCopyTex(d, GX_FALSE);
         GXFlush();
         // texel (5,6) is in block (1,1), position (1,2) inside it
         unsigned char* blk = d + ((1 * 16 + 1) * 64);
         int k = (2 * 4 + 1) * 2;
-        unsigned px = Px(105, 106);
+        unsigned px = Px(305, 306);
         CHECK(R(px) != 0 || G(px) != 0);
         CHECK(blk[k + 1] == R(px) && blk[32 + k] == G(px) && blk[32 + k + 1] == B(px));
         CHECK(blk[k] == (px >> 24));
@@ -457,7 +459,7 @@ static void TestTextures(unsigned char* mem)
         GXFlush();
         // 32x32 I8 texels in 8x4 blocks (4 blocks per row of 32): texel (3,2) = average of EFB (6..7, 4..5), luminance
         unsigned lum = 0;
-        for (int q = 0; q < 4; q++) { unsigned p = Px(106 + (q & 1), 104 + (q >> 1)); lum += (R(p) * 77 + G(p) * 150 + B(p) * 29) >> 8; }
+        for (int q = 0; q < 4; q++) { unsigned p = Px(306 + (q & 1), 304 + (q >> 1)); lum += (R(p) * 77 + G(p) * 150 + B(p) * 29) >> 8; }
         CHECK(Near(d[(0 * 4 + 0) * 32 + 2 * 8 + 3], (int) (lum / 4), 2));
     }
 
