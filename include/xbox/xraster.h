@@ -20,6 +20,7 @@ extern "C" {
 #define XRASTER_W 640
 #define XRASTER_H 528
 
+void XRaster_Bench(unsigned* us);                         // diagnostic: us for 64k pixels of 4 loop kinds (see xraster.cpp)
 void XRaster_Init(void);                                  // allocates the buffers (idempotent) and clears them
 const XGpBackend* XRaster_Backend(void);                  // pass to XGp_SetBackend
 void XRaster_Clear(unsigned argb, float z24);             // z24: depth in the 24-bit units of the viewport (0..16777215)

@@ -685,10 +685,15 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
         if (c.aTest && !AlphaPass(c, flatOut[3])) return;
         const bool opaque = !(c.blend & 1) || (((c.blend >> 8) & 7) == 4 && ((c.blend >> 5) & 7) == 5 && flatOut[3] >= 255.0f);
         const bool noZ = !c.zEnable && !c.zUpdate;
-        unsigned packed = 0;
-        if (opaque && ((c.blend >> 3) & 1) && ((c.blend >> 4) & 1) && noZ) {   // plain store of a constant
-            packed = ((unsigned) Clamp8(flatOut[3]) << 24) | ((unsigned) Clamp8(flatOut[0]) << 16) | ((unsigned) Clamp8(flatOut[1]) << 8) |
-                     (unsigned) Clamp8(flatOut[2]);
+        const bool wr = ((c.blend >> 3) & 1) && ((c.blend >> 4) & 1);                      // colour and alpha are written
+        const bool stdBlend = (c.blend & 1) && ((c.blend >> 8) & 7) == 4 && ((c.blend >> 5) & 7) == 5 && !((c.blend >> 11) & 1);
+        if (wr && (opaque || stdBlend || !(c.blend & 1))) {   // constant colour: store it, or blend it with integers
+            const unsigned sa = Clamp8(flatOut[3]);
+            const unsigned packed = (sa << 24) | ((unsigned) Clamp8(flatOut[0]) << 16) | ((unsigned) Clamp8(flatOut[1]) << 8) | (unsigned) Clamp8(flatOut[2]);
+            const bool store = opaque || !(c.blend & 1);
+            const unsigned w = sa + (sa >> 7), iw = 256 - w;                               // weights out of 256
+            const unsigned srb = (packed & 0x00FF00FFu) * w, sg = (packed & 0x0000FF00u) * w;
+            const unsigned aOut = sa << 24;
             for (int y = iy0; y <= iy1; y++) {
                 float py = (float) y + 0.5f, px0 = (float) ix0 + 0.5f;
                 float e0 = A0 * (px0 - X0) + B0 * (py - Y0), e1 = A1 * (px0 - X1) + B1 * (py - Y1), e2 = A2 * (px0 - X2) + B2 * (py - Y2);
@@ -711,10 +716,22 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
                 }
                 if (empty || lo > hi) continue;
                 unsigned* row = g_pix + y * XRASTER_W + ix0;
+                float* zrow = g_z + y * XRASTER_W + ix0;
                 for (int xr = lo; xr <= hi; xr++) {
                     float f = (float) xr;
                     if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
-                    row[xr] = packed;
+                    if (!noZ) {
+                        if (c.zEnable && !ZTest(c.zFunc, fz, zrow[xr])) continue;
+                        if (c.zUpdate) zrow[xr] = fz;
+                    }
+                    if (store) {
+                        row[xr] = packed;
+                    } else {
+                        unsigned d = row[xr];
+                        unsigned rb = (((d & 0x00FF00FFu) * iw + srb) >> 8) & 0x00FF00FFu;
+                        unsigned gg = (((d & 0x0000FF00u) * iw + sg) >> 8) & 0x0000FF00u;
+                        row[xr] = aOut | rb | gg;
+                    }
                     g_px++;
                 }
             }
@@ -983,4 +1000,46 @@ extern "C" void XRaster_BigDraws(unsigned long long* maxPx, unsigned long long* 
 {
     *maxPx = g_maxDrawPx; *bigDraws = g_bigDraws;
     g_maxDrawPx = 0; g_bigDraws = 0;
+}
+
+// Diagnostic: time of 64k pixels (a 640x100 band) for four kinds of loop, in microseconds, measured once on private buffers:
+// [0] plain u32 store, [1] u32 read-modify-write blend with integers, [2] float z compare + store + u32 store, [3] the float PlotPixel blend.
+extern "C" void XRaster_Bench(unsigned* us)
+{
+    const int n = 640 * 100;
+    if (!g_clock) { us[0] = us[1] = us[2] = us[3] = 0; return; }
+    unsigned* p = (unsigned*) malloc(n * sizeof(unsigned));
+    float* z = (float*) malloc(n * sizeof(float));
+    if (!p || !z) { free(p); free(z); us[0] = us[1] = us[2] = us[3] = 0; return; }
+    unsigned long long t;
+    t = g_clock();
+    for (int i = 0; i < n; i++) p[i] = 0x80402010u;
+    us[0] = (unsigned) (g_clock() - t);
+    t = g_clock();
+    for (int i = 0; i < n; i++) {
+        unsigned d = p[i];
+        unsigned rb = (((d & 0x00FF00FFu) * 128u + 0x00200020u) >> 8) & 0x00FF00FFu, gg = (((d & 0xFF00u) * 128u + 0x2000u) >> 8) & 0xFF00u;
+        p[i] = 0x80000000u | rb | gg;
+    }
+    us[1] = (unsigned) (g_clock() - t);
+    t = g_clock();
+    for (int i = 0; i < n; i++) {
+        float zz = (float) i;
+        if (zz >= z[i]) { z[i] = zz; p[i] = 0xFF00FF00u; }
+    }
+    us[2] = (unsigned) (g_clock() - t);
+    t = g_clock();
+    {
+        Ctx c;
+        memset(&c, 0, sizeof c);
+        c.blend = 1 | (1 << 3) | (1 << 4) | (5 << 5) | (4 << 8);
+        const float col[4] = {32.0f, 64.0f, 128.0f, 128.0f};
+        unsigned long long keep = g_px;
+        unsigned* sp = g_pix; g_pix = p;
+        float* sz = g_z; g_z = z;
+        for (int i = 0; i < n; i++) PlotPixel(c, i, 0.0f, col);
+        g_pix = sp; g_z = sz; g_px = keep;
+    }
+    us[3] = (unsigned) (g_clock() - t);
+    free(p); free(z);
 }
