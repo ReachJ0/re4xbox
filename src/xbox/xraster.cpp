@@ -756,6 +756,200 @@ bool AlphaPass(const Ctx& c, float alpha)
     }
 }
 
+
+// ---- integer pixel pipeline ----
+// The float pipeline above costs hundreds of floating point operations per textured pixel, which an emulated or slow FPU turns
+// into microseconds. This one keeps the per-pixel work in integers: colours in 16.16, texture coordinates in 12.20, bilinear
+// filtering and the TEV on 8 bit values. It is used when the triangle has no perspective (1/w constant, i.e. 2D / orthographic
+// draws) and every sampled texture has a decoded-texel cache; everything else goes through the float pipeline.
+bool g_fixed = true;
+
+inline unsigned TexelPx(const Ctx::Map& m, int x, int y, const unsigned char* lim)
+{
+    int i = y * m.w + x;
+    if (m.ok[i]) return m.px[i];
+    float t[4];
+    TexelSlow(m, x, y, lim, t);
+    unsigned v = ((unsigned) Clamp8(t[3]) << 24) | ((unsigned) Clamp8(t[0]) << 16) | ((unsigned) Clamp8(t[1]) << 8) | (unsigned) Clamp8(t[2]);
+    m.px[i] = v;
+    m.ok[i] = 1;
+    return v;
+}
+
+// Sample at normalised coordinates given in 12.20 fixed point; returns packed ARGB.
+inline unsigned SampleFx(const Ctx::Map& m, const unsigned char* lim, int s20, int t20)
+{
+    long long uu = ((long long) s20 * m.w) >> 4, vv = ((long long) t20 * m.h) >> 4;   // 16.16 texel units
+    int u = uu > 0x3FFFFFFF ? 0x3FFFFFFF : uu < -0x3FFFFFFF ? -0x3FFFFFFF : (int) uu;
+    int v = vv > 0x3FFFFFFF ? 0x3FFFFFFF : vv < -0x3FFFFFFF ? -0x3FFFFFFF : (int) vv;
+    if (!m.linear) return TexelPx(m, Wrap(u >> 16, m.w, m.wrapS), Wrap(v >> 16, m.h, m.wrapT), lim);
+    u -= 0x8000;
+    v -= 0x8000;
+    int x0 = u >> 16, y0 = v >> 16;
+    unsigned fx = (unsigned) (u >> 8) & 255, fy = (unsigned) (v >> 8) & 255;
+    int xa = Wrap(x0, m.w, m.wrapS), xb = Wrap(x0 + 1, m.w, m.wrapS), ya = Wrap(y0, m.h, m.wrapT), yb = Wrap(y0 + 1, m.h, m.wrapT);
+    unsigned a = TexelPx(m, xa, ya, lim), b = TexelPx(m, xb, ya, lim), c = TexelPx(m, xa, yb, lim), d = TexelPx(m, xb, yb, lim);
+    const unsigned M = 0x00FF00FFu;
+    unsigned t0rb = (((a & M) * (256 - fx) + (b & M) * fx) >> 8) & M, t0ag = ((((a >> 8) & M) * (256 - fx) + ((b >> 8) & M) * fx) >> 8) & M;
+    unsigned t1rb = (((c & M) * (256 - fx) + (d & M) * fx) >> 8) & M, t1ag = ((((c >> 8) & M) * (256 - fx) + ((d >> 8) & M) * fx) >> 8) & M;
+    unsigned rb = (((t0rb * (256 - fy)) + (t1rb * fy)) >> 8) & M, ag = (((t0ag * (256 - fy)) + (t1ag * fy)) >> 8) & M;
+    return (ag << 8) | rb;
+}
+
+inline int CSelI(int sel, int k, int (*reg)[4], const int* tex, const int* ras, const int* kc)
+{
+    switch (sel) {
+    case 0: return reg[0][k];
+    case 1: return reg[0][3];
+    case 2: return reg[1][k];
+    case 3: return reg[1][3];
+    case 4: return reg[2][k];
+    case 5: return reg[2][3];
+    case 6: return reg[3][k];
+    case 7: return reg[3][3];
+    case 8: return tex[k];
+    case 9: return tex[3];
+    case 10: return ras[k];
+    case 11: return ras[3];
+    case 12: return 255;
+    case 13: return 128;
+    case 14: return kc[k];
+    default: return 0;
+    }
+}
+
+inline int ASelI(int sel, int (*reg)[4], const int* tex, const int* ras, int ka)
+{
+    switch (sel) {
+    case 0: case 1: case 2: case 3: return reg[sel][3];
+    case 4: return tex[3];
+    case 5: return ras[3];
+    case 6: return ka;
+    default: return 0;
+    }
+}
+
+inline int Clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+inline int Div255(int t) { return (t + 128 + ((t + 128) >> 8)) >> 8; }
+
+// kc / ka resolved to integers, initial registers
+struct FxTev {
+    int kc[16][3], ka[16];
+    int reg[4][4];
+};
+
+void FxTevInit(const Ctx& c, FxTev* f)
+{
+    for (int i = 0; i < c.nstage; i++) {
+        for (int k = 0; k < 3; k++) f->kc[i][k] = (int) (c.stage[i].kcv[k] + 0.5f);
+        f->ka[i] = (int) (c.stage[i].kav + 0.5f);
+    }
+    for (int r = 0; r < 4; r++)
+        for (int k = 0; k < 4; k++) f->reg[r][k] = (int) (c.reg[r][k] + (c.reg[r][k] < 0 ? -0.5f : 0.5f));
+}
+
+// col: rasterised colour (0..255 each); s20/t20: interpolated texture coordinates per set. out: 0..255 each.
+inline void TevFx(const Ctx& c, const FxTev& f, const int* col, int (*sc)[2], int* out)
+{
+    if (c.passclr) { for (int k = 0; k < 4; k++) out[k] = col[k]; return; }
+    if (c.fast) {
+        const Ctx::Stage& s = c.stage[0];
+        unsigned p = SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord][0], sc[s.ccoord][1]);
+        int tex[4] = {(int) ((p >> 16) & 255), (int) ((p >> 8) & 255), (int) (p & 255), (int) (p >> 24)};
+        if (c.fast == 2) { for (int k = 0; k < 4; k++) out[k] = tex[k]; }
+        else { for (int k = 0; k < 4; k++) out[k] = Div255(tex[k] * col[k]); }
+        return;
+    }
+    int reg[4][4];
+    memcpy(reg, f.reg, sizeof reg);
+    static const int bias[4] = {0, 128, -128, 0};
+    for (int i = 0; i < c.nstage; i++) {
+        const Ctx::Stage& s = c.stage[i];
+        int tex[4] = {255, 255, 255, 255};
+        if (s.needTex) {
+            unsigned p = SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord & 3][0], sc[s.ccoord & 3][1]);
+            tex[0] = (int) ((p >> 16) & 255); tex[1] = (int) ((p >> 8) & 255); tex[2] = (int) (p & 255); tex[3] = (int) (p >> 24);
+        }
+        static const int zero[4] = {0, 0, 0, 0};
+        const int* ras = s.cchan >= 0 ? col : zero;
+        int res[4];
+        for (int k = 0; k < 3; k++) {
+            int a = CSelI(s.ca, k, reg, tex, ras, f.kc[i]), b = CSelI(s.cb, k, reg, tex, ras, f.kc[i]);
+            int cc = CSelI(s.cc, k, reg, tex, ras, f.kc[i]), d = CSelI(s.cd, k, reg, tex, ras, f.kc[i]);
+            int v = Div255(a * 255 + cc * (b - a));
+            v = (s.cop ? d - v : d + v) + bias[s.cbias];
+            v = s.cscale == 1 ? v * 2 : s.cscale == 2 ? v * 4 : s.cscale == 3 ? v / 2 : v;
+            res[k] = s.cclamp ? Clampi(v, 0, 255) : Clampi(v, -1024, 1023);
+        }
+        {
+            int a = ASelI(s.aa, reg, tex, ras, f.ka[i]), b = ASelI(s.ab, reg, tex, ras, f.ka[i]);
+            int cc = ASelI(s.ac, reg, tex, ras, f.ka[i]), d = ASelI(s.ad, reg, tex, ras, f.ka[i]);
+            int v = Div255(a * 255 + cc * (b - a));
+            v = (s.aop ? d - v : d + v) + bias[s.abias];
+            v = s.ascale == 1 ? v * 2 : s.ascale == 2 ? v * 4 : s.ascale == 3 ? v / 2 : v;
+            res[3] = s.aclamp ? Clampi(v, 0, 255) : Clampi(v, -1024, 1023);
+        }
+        for (int k = 0; k < 3; k++) reg[s.cdest][k] = res[k];
+        reg[s.adest][3] = res[3];
+    }
+    for (int k = 0; k < 4; k++) out[k] = Clampi(reg[0][k], 0, 255);
+}
+
+inline bool AlphaPassI(const Ctx& c, int a)
+{
+    bool r0 = ACmp(c.acomp0, a, c.aref0), r1 = ACmp(c.acomp1, a, c.aref1);
+    switch (c.alogic) {
+    case 0: return r0 && r1;
+    case 1: return r0 || r1;
+    case 2: return r0 != r1;
+    default: return r0 == r1;
+    }
+}
+
+inline void PlotFx(const Ctx& c, int i, float z, const int* o)
+{
+    if ((c.blend & 1) && !(((c.blend >> 8) & 7) == 4 && ((c.blend >> 5) & 7) == 5 && !((c.blend >> 11) & 1))) {   // other blend factors: float path
+        float col[4] = {(float) o[0], (float) o[1], (float) o[2], (float) o[3]};
+        PlotPixel(c, i, z, col);
+        return;
+    }
+    g_px++;
+    unsigned old = g_pix[i];
+    unsigned r = (unsigned) o[0], g = (unsigned) o[1], b = (unsigned) o[2], a = (unsigned) o[3];
+    if (c.blend & 1) {
+        unsigned w = a + (a >> 7), iw = 256 - w;
+        r = (r * w + ((old >> 16) & 255) * iw) >> 8;
+        g = (g * w + ((old >> 8) & 255) * iw) >> 8;
+        b = (b * w + (old & 255) * iw) >> 8;
+    }
+    if (!((c.blend >> 3) & 1)) { r = (old >> 16) & 255; g = (old >> 8) & 255; b = old & 255; }
+    if (!((c.blend >> 4) & 1)) a = old >> 24;
+    g_pix[i] = (a << 24) | (r << 16) | (g << 8) | b;
+    if (c.zUpdate) g_z[i] = z;
+}
+
+// Row span of a triangle: the pixels (relative to ix0) where all three edge functions can be >= 0, widened by one pixel.
+inline bool SpanRange(const float* eA, const float* eE, int width, int* plo, int* phi)
+{
+    int lo = 0, hi = width;
+    for (int k = 0; k < 3; k++) {
+        if (eA[k] > 0) {
+            float t = floorf(-eE[k] / eA[k]) - 1;
+            if (t > (float) hi + 1) return false;
+            if (t > (float) lo) lo = (int) t;
+        } else if (eA[k] < 0) {
+            float t = ceilf(eE[k] / -eA[k]) + 1;
+            if (t < (float) lo - 1) return false;
+            if (t < (float) hi) hi = (int) t;
+        } else if (eE[k] < 0) {
+            return false;
+        }
+    }
+    *plo = lo;
+    *phi = hi;
+    return lo <= hi;
+}
+
 void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
 {
     float area = (b.sx - a.sx) * (d.sy - a.sy) - (d.sx - a.sx) * (b.sy - a.sy);
@@ -870,6 +1064,70 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
             return;
         }
         flatZ = fz;
+    }
+
+    // integer pipeline (see above): no perspective, every sampled map decoded into the texel cache
+    if (g_fixed && !flat) {
+        bool ok = !c.tev || ntc == 0 || (v0[5] == v1[5] && v0[5] == v2[5] && v0[5] != 0);
+        if (ok && c.tev && !c.passclr)
+            for (int i = 0; i < c.nstage; i++) if (c.stage[i].needTex && !c.map[c.stage[i].cmap].px) ok = false;
+        if (ok) {
+            FxTev ft;
+            if (c.tev) FxTevInit(c, &ft);
+            const float qiw = ntc ? 1.0f / v0[5] : 1.0f;
+            const bool useZ = c.zEnable || c.zUpdate;
+            for (int y = iy0; y <= iy1; y++) {
+                float py = (float) y + 0.5f, px0 = (float) ix0 + 0.5f;
+                float e0 = A0 * (px0 - X0) + B0 * (py - Y0), e1 = A1 * (px0 - X1) + B1 * (py - Y1), e2 = A2 * (px0 - X2) + B2 * (py - Y2);
+                const float eA[3] = {A0, A1, A2}, eE[3] = {e0, e1, e2};
+                int lo, hi;
+                if (!SpanRange(eA, eE, ix1 - ix0, &lo, &hi)) continue;
+                float base[14];
+                {
+                    float w0 = (e0 + A0 * (float) lo) * inv, w1 = (e1 + A1 * (float) lo) * inv, w2 = (e2 + A2 * (float) lo) * inv;
+                    for (int q = 0; q < na; q++) base[q] = w0 * v0[q] + w1 * v1[q] + w2 * v2[q];
+                }
+                int cf[4], dcf[4], s0[4][2], ds[4][2];
+                for (int q = 0; q < 4; q++) { cf[q] = (int) (base[q] * 65536.0f); dcf[q] = (int) (g[q] * 65536.0f); }
+                for (int t = 0; t < ntc; t++)
+                    for (int k = 0; k < 2; k++) {
+                        float b0 = base[6 + 2 * t + k] * qiw * 1048576.0f;
+                        s0[t][k] = (int) (b0 > 2.0e9f ? 2.0e9f : b0 < -2.0e9f ? -2.0e9f : b0);
+                        ds[t][k] = (int) (g[6 + 2 * t + k] * qiw * 1048576.0f);
+                    }
+                const float z0 = base[4], gz = g[4];
+                unsigned* row = g_pix + y * XRASTER_W + ix0;
+                for (int xr = lo; xr <= hi; xr++) {
+                    if (xr <= lo + 2 || xr >= hi - 2) {   // only the pixels near the ends of the span can be outside
+                        float f = (float) xr;
+                        if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
+                    }
+                    int idx = y * XRASTER_W + ix0 + xr;
+                    float z = 0;
+                    if (useZ) {
+                        z = z0 + gz * (float) (xr - lo);
+                        if (z < 0) z = 0;
+                        if (z > 16777215.0f) z = 16777215.0f;
+                        if (c.zEnable && !ZTest(c.zFunc, z, g_z[idx])) continue;
+                    }
+                    int dxs = xr - lo;
+                    int col[4];
+                    for (int q = 0; q < 4; q++) col[q] = Clampi((cf[q] + dcf[q] * dxs) >> 16, 0, 255);
+                    int out[4];
+                    if (c.tev) {
+                        int sc[4][2];
+                        for (int t = 0; t < ntc; t++) { sc[t][0] = s0[t][0] + ds[t][0] * dxs; sc[t][1] = s0[t][1] + ds[t][1] * dxs; }
+                        TevFx(c, ft, col, sc, out);
+                    } else {
+                        for (int q = 0; q < 4; q++) out[q] = col[q];
+                    }
+                    if (c.aTest && !AlphaPassI(c, out[3])) continue;
+                    PlotFx(c, idx, z, out);
+                }
+                (void) row;
+            }
+            return;
+        }
     }
 
     for (int y = iy0; y <= iy1; y++) {
@@ -1356,3 +1614,5 @@ extern "C" void XRaster_Slowest(unsigned* out)
 {
     for (int k = 0; k < 40; k++) { out[k] = g_slow[k]; g_slow[k] = 0; }
 }
+
+extern "C" void XRaster_SetFixed(int on) { g_fixed = on != 0; }

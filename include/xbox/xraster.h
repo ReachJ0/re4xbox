@@ -24,6 +24,7 @@ void XRaster_Bench(unsigned* us);                         // diagnostic: us for 
 void XRaster_Slowest(unsigned* out);                      // diagnostic: the slowest draw since the last call (12 words)
 void XRaster_SetCapture(const char* path);                // the first draw slower than 0.9 s is written to this file (see tools/xbox/drawcap_replay.cpp)
 void XRaster_SetPalettes(const void* slots, int used, unsigned slotSize);   // (replay tool) restores the TLUT slots of a capture
+void XRaster_SetFixed(int on);                            // 1 (default): integer pixel pipeline where it applies; 0: always the float pipeline (tests)
 void XRaster_Init(void);                                  // allocates the buffers (idempotent) and clears them
 const XGpBackend* XRaster_Backend(void);                  // pass to XGp_SetBackend
 void XRaster_Clear(unsigned argb, float z24);             // z24: depth in the 24-bit units of the viewport (0..16777215)

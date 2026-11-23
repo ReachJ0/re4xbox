@@ -273,7 +273,7 @@ void GXInitLightColor(GXLightObj* lt_obj, GXColor color) {
     obj = (__GXLightObjInt_struct*)lt_obj;
     CHECK_GXBEGIN(463, "GXInitLightColor");
 
-    *(u32*)&obj->Color = *(u32*)&color;
+    obj->Color = GXCOLOR_U32(color);
 }
 
 void GXGetLightColor(const GXLightObj* lt_obj, GXColor* color) {
@@ -283,7 +283,11 @@ void GXGetLightColor(const GXLightObj* lt_obj, GXColor* color) {
     obj = (__GXLightObjInt_struct*)lt_obj;
     CHECK_GXBEGIN(477, "GXGetLightColor");
 
+#ifdef RE4_XBOX
+    color->r = (u8)(obj->Color >> 24); color->g = (u8)(obj->Color >> 16); color->b = (u8)(obj->Color >> 8); color->a = (u8)obj->Color;
+#else
     *(u32*)color = *(u32*)&obj->Color;
+#endif
 }
 
 #if DEBUG
@@ -437,7 +441,7 @@ void GXLoadLightObjIndx(u32 lt_obj_indx, GXLightID light) {
     __GXData->bpSentNot = 1;
 }
 
-#define GXCOLOR_AS_U32(color) (*((u32*)&(color)))
+#define GXCOLOR_AS_U32(color) GXCOLOR_U32(color)
 
 void GXSetChanAmbColor(GXChannelID chan, GXColor amb_color) {
     u32 reg;

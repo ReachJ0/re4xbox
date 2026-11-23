@@ -29,6 +29,14 @@ extern "C" {
 #define GX_WRITE_U16(us)   \
    GXFIFO_WRITE(u16, (u16)(us))
 
+// A GXColor as the big-endian u32 0xRRGGBBAA the GameCube code gets by reading its four bytes; on the little-endian Xbox the
+// plain read gives 0xAABBGGRR, so it is packed explicitly there.
+#ifdef RE4_XBOX
+#define GXCOLOR_U32(c) (((u32)(c).r << 24) | ((u32)(c).g << 16) | ((u32)(c).b << 8) | (u32)(c).a)
+#else
+#define GXCOLOR_U32(c) (*(u32*)&(c))
+#endif
+
 #define GX_WRITE_U32(ui)   \
    GXFIFO_WRITE(u32, (u32)(ui))
 

@@ -528,6 +528,7 @@ int main()
     CHECK(XMem_SetBase(blk, XMEM_SPAN));
     GXInit((unsigned char*) blk + 0x100000, 0x20000);
     XRaster_Init();
+    if (getenv("RASTER_FLOAT")) XRaster_SetFixed(0);
     XGp_SetBackend(XRaster_Backend());
     TestGouraud();
     TestQuadStripFan();

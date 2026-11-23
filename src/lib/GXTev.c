@@ -238,7 +238,7 @@ void GXSetTevColor(GXTevRegID id, GXColor color) {
     u32 regBG;
 
     CHECK_GXBEGIN(740, "GXSetTevColor");
-    rgba = *(u32*)&color;
+    rgba = GXCOLOR_U32(color);
 
     regRA = (0xE0 + id * 2) << 24;
     SET_REG_FIELD(745, regRA, 8, 0, rgba >> 24);
@@ -268,8 +268,13 @@ void GXSetTevColorS10(GXTevRegID id, GXColorS10 color) {
     ASSERTMSGLINE(780, color.a >= -1024 && color.a < 1024, "GXSetTevColorS10: Color not in range -1024 to +1023");
 
     CHECK_GXBEGIN(782, "GXSetTevColorS10");
+#ifdef RE4_XBOX
+    sRG = ((u32)(u16)color.r << 16) | (u16)color.g;
+    sBA = ((u32)(u16)color.b << 16) | (u16)color.a;
+#else
     sRG = *(u32*)&color;
     sBA = *((u32*)&color + 1);
+#endif
 
     regRA = (0xE0 + id * 2) << 24;
     SET_REG_FIELD(789, regRA, 11,  0, (sRG >> 16) & 0x7FF);
@@ -293,7 +298,7 @@ void GXSetTevKColor(GXTevKColorID id, GXColor color) {
     u32 regBG;
 
     CHECK_GXBEGIN(833, "GXSetTevKColor");
-    rgba = *(u32*)&color;
+    rgba = GXCOLOR_U32(color);
 
     regRA = (0xE0 + id * 2) << 24;
     SET_REG_FIELD(838, regRA, 8, 0, rgba >> 24);
