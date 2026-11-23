@@ -29,7 +29,7 @@ void XRaster_Init(void);                                  // allocates the buffe
 const XGpBackend* XRaster_Backend(void);                  // pass to XGp_SetBackend
 void XRaster_Clear(unsigned argb, float z24);             // z24: depth in the 24-bit units of the viewport (0..16777215)
 const unsigned* XRaster_Pixels(void);                     // XRASTER_W * XRASTER_H, 0xAARRGGBB
-const float* XRaster_Depth(void);
+const unsigned* XRaster_Depth(void);   // 24 bit depth values
 unsigned XRaster_CopySerial(void);                        // counts EFB -> XFB copies (GXCopyDisp), so a presenter knows when the XFB changed
 void XRaster_SetClock(unsigned long long (*us)(void));    // optional microsecond clock for the statistics below
 void XRaster_Stats(unsigned long long* usDraw, unsigned long long* usCopy, unsigned long long* px, unsigned long long* tris,

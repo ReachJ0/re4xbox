@@ -8,7 +8,7 @@
 namespace {
 
 unsigned* g_pix;
-float* g_z;
+unsigned* g_z;
 unsigned long long g_tris;
 unsigned long long g_px, g_usDraw, g_usCopy, g_draws;   // statistics for the development HUD
 unsigned long long (*g_clock)(void);
@@ -379,7 +379,7 @@ void Setup(const XGpState* st, Ctx* c)
     SetupTev(st, c);
 }
 
-bool ZTest(int func, float z, float old)
+bool ZTest(int func, unsigned z, unsigned old)
 {
     switch (func) {
     case 0: return false;
@@ -443,7 +443,7 @@ inline void PlotPixel(const Ctx& c, int i, float z, const float* col)
     if (!((c.blend >> 3) & 1)) { r = (old >> 16) & 255; g = (old >> 8) & 255; b = old & 255; }
     if (!((c.blend >> 4) & 1)) a = old >> 24;
     g_pix[i] = (a << 24) | (r << 16) | (g << 8) | b;
-    if (c.zUpdate) g_z[i] = z;
+    if (c.zUpdate) g_z[i] = (unsigned) z;
 }
 
 void Plot(const Ctx& c, int x, int y, float z, const float* col)
@@ -451,7 +451,7 @@ void Plot(const Ctx& c, int x, int y, float z, const float* col)
     int i = y * XRASTER_W + x;
     if (z < 0) z = 0;
     if (z > 16777215.0f) z = 16777215.0f;
-    if (c.zEnable && !ZTest(c.zFunc, z, g_z[i])) return;
+    if (c.zEnable && !ZTest(c.zFunc, (unsigned) z, g_z[i])) return;
     PlotPixel(c, i, z, col);
 }
 
@@ -799,12 +799,12 @@ inline unsigned TexelPx(const Ctx::Map& m, int x, int y, const unsigned char* li
 }
 
 // Sample at normalised coordinates given in 12.20 fixed point; returns packed ARGB.
-inline unsigned SampleFx(const Ctx::Map& m, const unsigned char* lim, int s20, int t20)
+inline unsigned SampleFx(const Ctx::Map& m, const unsigned char* lim, int s20, int t20, bool nearest)
 {
     long long uu = ((long long) s20 * m.w) >> 4, vv = ((long long) t20 * m.h) >> 4;   // 16.16 texel units
     int u = uu > 0x3FFFFFFF ? 0x3FFFFFFF : uu < -0x3FFFFFFF ? -0x3FFFFFFF : (int) uu;
     int v = vv > 0x3FFFFFFF ? 0x3FFFFFFF : vv < -0x3FFFFFFF ? -0x3FFFFFFF : (int) vv;
-    if (!m.linear) return TexelPx(m, Wrap(u >> 16, m.w, m.wrapS), Wrap(v >> 16, m.h, m.wrapT), lim);
+    if (!m.linear || nearest) return TexelPx(m, Wrap(u >> 16, m.w, m.wrapS), Wrap(v >> 16, m.h, m.wrapT), lim);
     u -= 0x8000;
     v -= 0x8000;
     int x0 = u >> 16, y0 = v >> 16;
@@ -858,6 +858,7 @@ inline int Div255(int t) { return (t + 128 + ((t + 128) >> 8)) >> 8; }
 struct FxTev {
     int kc[16][3], ka[16];
     int reg[4][4];
+    bool useTex[16];                    // the stage reads the texture colour or alpha
 };
 
 void FxTevInit(const Ctx& c, FxTev* f)
@@ -865,6 +866,9 @@ void FxTevInit(const Ctx& c, FxTev* f)
     for (int i = 0; i < c.nstage; i++) {
         for (int k = 0; k < 3; k++) f->kc[i][k] = (int) (c.stage[i].kcv[k] + 0.5f);
         f->ka[i] = (int) (c.stage[i].kav + 0.5f);
+        const Ctx::Stage& st = c.stage[i];
+        f->useTex[i] = st.needTex && (st.ca == 8 || st.ca == 9 || st.cb == 8 || st.cb == 9 || st.cc == 8 || st.cc == 9 || st.cd == 8 || st.cd == 9 ||
+                                      st.aa == 4 || st.ab == 4 || st.ac == 4 || st.ad == 4);
     }
     for (int r = 0; r < 4; r++)
         for (int k = 0; k < 4; k++) f->reg[r][k] = (int) (c.reg[r][k] + (c.reg[r][k] < 0 ? -0.5f : 0.5f));
@@ -873,12 +877,12 @@ void FxTevInit(const Ctx& c, FxTev* f)
 // col: rasterised colour (0..255 each); s20/t20: interpolated texture coordinates per set. out: 0..255 each.
 int g_probe = -1;   // >= 0: every texture sample returns this value in all four channels (alpha rejection probe)
 
-inline void TevFx(const Ctx& c, const FxTev& f, const int* col, int (*sc)[2], int* out)
+inline void TevFx(const Ctx& c, const FxTev& f, const int* col, int (*sc)[2], const bool* nr, int* out)
 {
     if (c.passclr) { for (int k = 0; k < 4; k++) out[k] = col[k]; return; }
     if (c.fast) {
         const Ctx::Stage& s = c.stage[0];
-        unsigned p = g_probe >= 0 ? (unsigned) g_probe * 0x01010101u : SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord][0], sc[s.ccoord][1]);
+        unsigned p = g_probe >= 0 ? (unsigned) g_probe * 0x01010101u : SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord][0], sc[s.ccoord][1], nr[0]);
         int tex[4] = {(int) ((p >> 16) & 255), (int) ((p >> 8) & 255), (int) (p & 255), (int) (p >> 24)};
         if (c.fast == 2) { for (int k = 0; k < 4; k++) out[k] = tex[k]; }
         else { for (int k = 0; k < 4; k++) out[k] = Div255(tex[k] * col[k]); }
@@ -890,8 +894,8 @@ inline void TevFx(const Ctx& c, const FxTev& f, const int* col, int (*sc)[2], in
     for (int i = 0; i < c.nstage; i++) {
         const Ctx::Stage& s = c.stage[i];
         int tex[4] = {255, 255, 255, 255};
-        if (s.needTex) {
-            unsigned p = g_probe >= 0 ? (unsigned) g_probe * 0x01010101u : SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord & 3][0], sc[s.ccoord & 3][1]);
+        if (f.useTex[i]) {
+            unsigned p = g_probe >= 0 ? (unsigned) g_probe * 0x01010101u : SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord & 3][0], sc[s.ccoord & 3][1], nr[i]);
             tex[0] = (int) ((p >> 16) & 255); tex[1] = (int) ((p >> 8) & 255); tex[2] = (int) (p & 255); tex[3] = (int) (p >> 24);
         }
         static const int zero[4] = {0, 0, 0, 0};
@@ -930,11 +934,11 @@ inline bool AlphaPassI(const Ctx& c, int a)
     }
 }
 
-inline void PlotFx(const Ctx& c, int i, float z, const int* o)
+inline void PlotFx(const Ctx& c, int i, unsigned z, const int* o)
 {
     if ((c.blend & 1) && !(((c.blend >> 8) & 7) == 4 && ((c.blend >> 5) & 7) == 5 && !((c.blend >> 11) & 1))) {   // other blend factors: float path
         float col[4] = {(float) o[0], (float) o[1], (float) o[2], (float) o[3]};
-        PlotPixel(c, i, z, col);
+        PlotPixel(c, i, (float) z, col);
         return;
     }
     g_px++;
@@ -1066,13 +1070,13 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
                 }
                 if (empty || lo > hi) continue;
                 unsigned* row = g_pix + y * XRASTER_W + ix0;
-                float* zrow = g_z + y * XRASTER_W + ix0;
+                unsigned* zrow = g_z + y * XRASTER_W + ix0;
                 for (int xr = lo; xr <= hi; xr++) {
                     float f = (float) xr;
                     if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
                     if (!noZ) {
-                        if (c.zEnable && !ZTest(c.zFunc, fz, zrow[xr])) continue;
-                        if (c.zUpdate) zrow[xr] = fz;
+                        if (c.zEnable && !ZTest(c.zFunc, (unsigned) fz, zrow[xr])) continue;
+                        if (c.zUpdate) zrow[xr] = (unsigned) fz;
                     }
                     if (store) {
                         row[xr] = packed;
@@ -1103,11 +1107,12 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
                 v0[3] == v1[3] && v0[3] == v2[3]) {
                 // constant raster colour: if no texel value (probes 0, 128, 255) can pass the alpha test, nothing of this triangle is drawn
                 int pc[4], po[4], zsc[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+                const bool noNear[16] = {false};
                 for (int q = 0; q < 4; q++) pc[q] = Clampi((int) v0[q], 0, 255);
                 bool any = false;
                 for (int pr = 0; pr < 3 && !any; pr++) {
                     g_probe = pr == 0 ? 0 : pr == 1 ? 128 : 255;
-                    TevFx(c, ft, pc, zsc, po);
+                    TevFx(c, ft, pc, zsc, noNear, po);
                     any = AlphaPassI(c, po[3]);
                 }
                 g_probe = -1;
@@ -1133,7 +1138,22 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
                         s0[t][k] = (int) (b0 > 2.0e9f ? 2.0e9f : b0 < -2.0e9f ? -2.0e9f : b0);
                         ds[t][k] = (int) (g[6 + 2 * t + k] * qiw * 1048576.0f);
                     }
-                const float z0 = base[4], gz = g[4];
+                // a linear map drawn 1:1 (a step of exactly one texel per pixel or none, centred on the texels) filters to the texel itself
+                bool nr[16];
+                for (int i = 0; i < c.nstage && c.tev; i++) {
+                    nr[i] = false;
+                    const Ctx::Stage& st = c.stage[i];
+                    if (!ft.useTex[i] || !c.map[st.cmap].linear) continue;
+                    const Ctx::Map& mm = c.map[st.cmap];
+                    int tt = st.ccoord & 3;
+                    long long su = ((long long) ds[tt][0] * mm.w) >> 4, sv = ((long long) ds[tt][1] * mm.h) >> 4;
+                    long long u0 = ((long long) s0[tt][0] * mm.w) >> 4, v0q = ((long long) s0[tt][1] * mm.h) >> 4;
+                    long long au = su < 0 ? -su : su, av = sv < 0 ? -sv : sv;
+                    bool stepU = au <= 1 || (au >= 65535 && au <= 65537), stepV = av <= 1 || (av >= 65535 && av <= 65537);
+                    long long fu = (u0 - 0x8000 + 512) & 0xFFFF, fv = (v0q - 0x8000 + 512) & 0xFFFF;
+                    nr[i] = stepU && stepV && fu < 1024 && fv < 1024;
+                }
+                const long long z0 = (long long) (base[4] * 128.0f), gz = (long long) (g[4] * 128.0f);
                 unsigned* row = g_pix + y * XRASTER_W + ix0;
                 for (int xr = lo; xr <= hi; xr++) {
                     if (xr <= lo + 2 || xr >= hi - 2) {   // only the pixels near the ends of the span can be outside
@@ -1141,11 +1161,12 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
                         if (e0 + A0 * f < 0 || e1 + A1 * f < 0 || e2 + A2 * f < 0) continue;
                     }
                     int idx = y * XRASTER_W + ix0 + xr;
-                    float z = 0;
+                    unsigned z = 0;
                     if (useZ) {
-                        z = z0 + gz * (float) (xr - lo);
-                        if (z < 0) z = 0;
-                        if (z > 16777215.0f) z = 16777215.0f;
+                        long long zz = z0 + gz * (xr - lo);   // 25.7 fixed point
+                        if (zz < 0) zz = 0;
+                        if (zz > 0x7FFFFF80ll) zz = 0x7FFFFF80ll;
+                        z = (unsigned) (zz >> 7);
                         if (c.zEnable && !ZTest(c.zFunc, z, g_z[idx])) continue;
                     }
                     int dxs = xr - lo;
@@ -1155,7 +1176,7 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
                     if (c.tev) {
                         int sc[4][2];
                         for (int t = 0; t < ntc; t++) { sc[t][0] = s0[t][0] + ds[t][0] * dxs; sc[t][1] = s0[t][1] + ds[t][1] * dxs; }
-                        TevFx(c, ft, col, sc, out);
+                        TevFx(c, ft, col, sc, nr, out);
                     } else {
                         for (int q = 0; q < 4; q++) out[q] = col[q];
                     }
@@ -1203,7 +1224,7 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
             int x = ix0 + xr;
             int idx = y * XRASTER_W + x;
             if (flat) {   // constant colour and z: only the z test and the blend are per pixel
-                if (c.zEnable && !ZTest(c.zFunc, flatZ, g_z[idx])) continue;
+                if (c.zEnable && !ZTest(c.zFunc, (unsigned) flatZ, g_z[idx])) continue;
                 PlotPixel(c, idx, flatZ, flatOut);
                 continue;
             }
@@ -1213,7 +1234,7 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
             float z = at[4];
             if (z < 0) z = 0;
             if (z > 16777215.0f) z = 16777215.0f;
-            if (c.zEnable && !ZTest(c.zFunc, z, g_z[idx])) continue;
+            if (c.zEnable && !ZTest(c.zFunc, (unsigned) z, g_z[idx])) continue;
             if (!c.tev) {
                 if (c.aTest && !AlphaPass(c, at[3])) continue;
                 PlotPixel(c, idx, z, at);
@@ -1454,7 +1475,7 @@ void CopyCmd(unsigned cmd, const XGpState* st)
             if (!clrColor) n = (n & 0xFF000000u) | (o & 0x00FFFFFFu);
             if (!clrAlpha) n = (n & 0x00FFFFFFu) | (o & 0xFF000000u);
             g_pix[i] = n;
-            if (clrZ) g_z[i] = (float) z;
+            if (clrZ) g_z[i] = z;
         }
     }
 }
@@ -1572,7 +1593,7 @@ extern "C" void XRaster_Init(void)
 {
     if (!g_pix) {
         g_pix = (unsigned*) malloc(sizeof(unsigned) * XRASTER_W * XRASTER_H);
-        g_z = (float*) malloc(sizeof(float) * XRASTER_W * XRASTER_H);
+        g_z = (unsigned*) malloc(sizeof(unsigned) * XRASTER_W * XRASTER_H);
     }
     g_tris = 0;
     XRaster_Clear(0xFF000000u, 16777215.0f);
@@ -1585,13 +1606,13 @@ extern "C" void XRaster_Clear(unsigned argb, float z24)
     if (!g_pix) return;
     for (int i = 0; i < XRASTER_W * XRASTER_H; i++) {
         g_pix[i] = argb;
-        g_z[i] = z24;
+        g_z[i] = (unsigned) z24;
     }
 }
 
 extern "C" unsigned XRaster_CopySerial(void) { return g_copySerial; }
 extern "C" const unsigned* XRaster_Pixels(void) { return g_pix; }
-extern "C" const float* XRaster_Depth(void) { return g_z; }
+extern "C" const unsigned* XRaster_Depth(void) { return g_z; }
 extern "C" unsigned long long XRaster_Triangles(void) { return g_tris; }
 extern "C" void XRaster_SetClock(unsigned long long (*us)(void)) { g_clock = us; }
 extern "C" void XRaster_Stats(unsigned long long* usDraw, unsigned long long* usCopy, unsigned long long* px, unsigned long long* tris,
@@ -1612,7 +1633,7 @@ extern "C" void XRaster_Bench(unsigned* us)
     const int n = 640 * 100;
     if (!g_clock) { us[0] = us[1] = us[2] = us[3] = 0; return; }
     unsigned* p = (unsigned*) malloc(n * sizeof(unsigned));
-    float* z = (float*) malloc(n * sizeof(float));
+    unsigned* z = (unsigned*) malloc(n * sizeof(unsigned));
     if (!p || !z) { free(p); free(z); us[0] = us[1] = us[2] = us[3] = 0; return; }
     unsigned long long t;
     t = g_clock();
@@ -1627,7 +1648,7 @@ extern "C" void XRaster_Bench(unsigned* us)
     us[1] = (unsigned) (g_clock() - t);
     t = g_clock();
     for (int i = 0; i < n; i++) {
-        float zz = (float) i;
+        unsigned zz = (unsigned) i;
         if (zz >= z[i]) { z[i] = zz; p[i] = 0xFF00FF00u; }
     }
     us[2] = (unsigned) (g_clock() - t);
@@ -1639,7 +1660,7 @@ extern "C" void XRaster_Bench(unsigned* us)
         const float col[4] = {32.0f, 64.0f, 128.0f, 128.0f};
         unsigned long long keep = g_px;
         unsigned* sp = g_pix; g_pix = p;
-        float* sz = g_z; g_z = z;
+        unsigned* sz = g_z; g_z = z;
         for (int i = 0; i < n; i++) PlotPixel(c, i, 0.0f, col);
         g_pix = sp; g_z = sz; g_px = keep;
     }

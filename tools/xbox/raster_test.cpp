@@ -274,7 +274,7 @@ static void TestCopyDisp(unsigned char* blk)
     const unsigned char* b = xfb + 400 * 1280 + 250 * 4;
     CHECK(Near(b[0], 41, 3) && Near(b[1], 240, 3) && Near(b[3], 110, 3));
     // the copy cleared the EFB to the clear colour (green) after copying
-    CHECK(Px(100, 50) == 0xFF00FF00u && Px(500, 400) == 0xFF00FF00u && XRaster_Depth()[50 * XRASTER_W + 100] == 16777215.0f);
+    CHECK(Px(100, 50) == 0xFF00FF00u && Px(500, 400) == 0xFF00FF00u && XRaster_Depth()[50 * XRASTER_W + 100] == 16777215u);
     // vertical scale 1.5: 320 source lines become 480 lines; line 3 of the copy comes from source line 2
     Frame();
     GXBegin(GX_QUADS, GX_VTXFMT0, 4);
