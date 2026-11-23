@@ -182,11 +182,15 @@ struct TexCacheEnt {
     unsigned* px;
     unsigned char* ok;
     unsigned bytes;
+    bool full;                      // every texel is decoded
 };
 TexCacheEnt g_tc[16];
 int g_tcNext;
 unsigned g_tcBytes;
 const unsigned TC_BUDGET = 8u << 20;
+
+void TexelSlow(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o);
+inline unsigned char Clamp8(float f);
 
 void PrepMap(Ctx::Map& mp, const unsigned char* lim)
 {
@@ -224,13 +228,31 @@ void PrepMap(Ctx::Map& mp, const unsigned char* lim)
         e->ok = (unsigned char*) malloc((size_t) mp.w * mp.h);
         if (!e->px || !e->ok) { free(e->px); free(e->ok); e->px = 0; e->ok = 0; return; }
         e->bytes = need;
+        e->full = false;
         g_tcBytes += need;
         memset(e->ok, 0, (size_t) mp.w * mp.h);
         e->sum = sum + 1;
     }
-    if (e->sum != sum) { memset(e->ok, 0, (size_t) mp.w * mp.h); e->sum = sum; }
+    if (e->sum != sum) { memset(e->ok, 0, (size_t) mp.w * mp.h); e->sum = sum; e->full = false; }
     e->data = mp.data; e->fmt = mp.fmt; e->w = mp.w; e->h = mp.h;
     mp.px = e->px; mp.ok = e->ok;
+    // small textures are decoded completely at once, so every access is a single load (ok == 0 means "all decoded")
+    if (mp.w * mp.h <= 131072 && e->full) {
+        mp.ok = 0;
+    } else if (mp.w * mp.h <= 131072) {
+        const Ctx::Map& cm = mp;
+        for (int y = 0; y < mp.h; y++)
+            for (int x = 0; x < mp.w; x++) {
+                int i = y * mp.w + x;
+                if (e->ok[i]) continue;
+                float t[4];
+                TexelSlow(cm, x, y, lim, t);
+                e->px[i] = ((unsigned) Clamp8(t[3]) << 24) | ((unsigned) Clamp8(t[0]) << 16) | ((unsigned) Clamp8(t[1]) << 8) | (unsigned) Clamp8(t[2]);
+                e->ok[i] = 1;
+            }
+        mp.ok = 0;
+        e->full = true;
+    }
 }
 
 void SetupTev(const XGpState* st, Ctx* c)
@@ -566,7 +588,7 @@ inline void Texel(const Ctx::Map& m, int x, int y, const unsigned char* lim, flo
     if (m.px) {
         int i = y * m.w + x;
         unsigned v;
-        if (m.ok[i]) {
+        if (!m.ok || m.ok[i]) {
             v = m.px[i];
         } else {
             float t[4];
@@ -767,7 +789,7 @@ bool g_fixed = true;
 inline unsigned TexelPx(const Ctx::Map& m, int x, int y, const unsigned char* lim)
 {
     int i = y * m.w + x;
-    if (m.ok[i]) return m.px[i];
+    if (!m.ok || m.ok[i]) return m.px[i];
     float t[4];
     TexelSlow(m, x, y, lim, t);
     unsigned v = ((unsigned) Clamp8(t[3]) << 24) | ((unsigned) Clamp8(t[0]) << 16) | ((unsigned) Clamp8(t[1]) << 8) | (unsigned) Clamp8(t[2]);
@@ -849,12 +871,14 @@ void FxTevInit(const Ctx& c, FxTev* f)
 }
 
 // col: rasterised colour (0..255 each); s20/t20: interpolated texture coordinates per set. out: 0..255 each.
+int g_probe = -1;   // >= 0: every texture sample returns this value in all four channels (alpha rejection probe)
+
 inline void TevFx(const Ctx& c, const FxTev& f, const int* col, int (*sc)[2], int* out)
 {
     if (c.passclr) { for (int k = 0; k < 4; k++) out[k] = col[k]; return; }
     if (c.fast) {
         const Ctx::Stage& s = c.stage[0];
-        unsigned p = SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord][0], sc[s.ccoord][1]);
+        unsigned p = g_probe >= 0 ? (unsigned) g_probe * 0x01010101u : SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord][0], sc[s.ccoord][1]);
         int tex[4] = {(int) ((p >> 16) & 255), (int) ((p >> 8) & 255), (int) (p & 255), (int) (p >> 24)};
         if (c.fast == 2) { for (int k = 0; k < 4; k++) out[k] = tex[k]; }
         else { for (int k = 0; k < 4; k++) out[k] = Div255(tex[k] * col[k]); }
@@ -867,7 +891,7 @@ inline void TevFx(const Ctx& c, const FxTev& f, const int* col, int (*sc)[2], in
         const Ctx::Stage& s = c.stage[i];
         int tex[4] = {255, 255, 255, 255};
         if (s.needTex) {
-            unsigned p = SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord & 3][0], sc[s.ccoord & 3][1]);
+            unsigned p = g_probe >= 0 ? (unsigned) g_probe * 0x01010101u : SampleFx(c.map[s.cmap], c.lim, sc[s.ccoord & 3][0], sc[s.ccoord & 3][1]);
             tex[0] = (int) ((p >> 16) & 255); tex[1] = (int) ((p >> 8) & 255); tex[2] = (int) (p & 255); tex[3] = (int) (p >> 24);
         }
         static const int zero[4] = {0, 0, 0, 0};
@@ -1075,6 +1099,20 @@ void FillTri(const Ctx& c, const V& a, const V& b, const V& d)
             FxTev ft;
             if (c.tev) FxTevInit(c, &ft);
             const float qiw = ntc ? 1.0f / v0[5] : 1.0f;
+            if (c.tev && c.aTest && ntc && v0[0] == v1[0] && v0[0] == v2[0] && v0[1] == v1[1] && v0[1] == v2[1] && v0[2] == v1[2] && v0[2] == v2[2] &&
+                v0[3] == v1[3] && v0[3] == v2[3]) {
+                // constant raster colour: if no texel value (probes 0, 128, 255) can pass the alpha test, nothing of this triangle is drawn
+                int pc[4], po[4], zsc[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+                for (int q = 0; q < 4; q++) pc[q] = Clampi((int) v0[q], 0, 255);
+                bool any = false;
+                for (int pr = 0; pr < 3 && !any; pr++) {
+                    g_probe = pr == 0 ? 0 : pr == 1 ? 128 : 255;
+                    TevFx(c, ft, pc, zsc, po);
+                    any = AlphaPassI(c, po[3]);
+                }
+                g_probe = -1;
+                if (!any) { g_tris--; return; }
+            }
             const bool useZ = c.zEnable || c.zUpdate;
             for (int y = iy0; y <= iy1; y++) {
                 float py = (float) y + 0.5f, px0 = (float) ix0 + 0.5f;
