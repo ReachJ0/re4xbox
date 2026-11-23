@@ -433,6 +433,26 @@ static void TestTextures(unsigned char* mem)
         CHECK(G(Px(100, 150)) == 255 && R(Px(100, 150)) == 0);
     }
 
+    // draw capture: with a clock that makes every draw look slow, the next draw is written to a file the replay tool reads
+    {
+        static unsigned long long fake;
+        struct F { static unsigned long long Now() { return fake += 2000000ull; } };
+        const char* capPath = getenv("RASTER_CAPTURE");
+        if (capPath) {
+            XRaster_SetClock(F::Now);
+            XRaster_SetCapture(capPath);
+            Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+            UseTex(t, 8, 4, GX_TF_I8, GX_REPLACE);
+            TexQuad(255, 255, 255, 255);
+            XRaster_SetCapture(0);
+            XRaster_SetClock(0);
+            FILE* cf = fopen(capPath, "rb");
+            unsigned magic = 0;
+            CHECK(cf && fread(&magic, 4, 1, cf) == 1 && magic == 0x50414352u);
+            if (cf) fclose(cf);
+        }
+    }
+
     // restore the plain vertex-colour state for anything after this
     GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GXSetNumTexGens(0);

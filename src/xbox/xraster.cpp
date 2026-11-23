@@ -1,6 +1,7 @@
 // Software rasterizer behind XGpBackend, see include/xbox/xraster.h.
 #include "xbox/xraster.h"
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -963,7 +964,7 @@ void Line(const Ctx& c, V a, V b)
     }
 }
 
-unsigned g_cur[12], g_slow[12];
+unsigned g_cur[24], g_slow[24];
 
 void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, void*)
 {
@@ -973,6 +974,10 @@ void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, 
     g_cur[4] = c.blend; g_cur[5] = (unsigned) (c.zEnable | c.zUpdate << 1 | c.zFunc << 2); g_cur[6] = (unsigned) (c.tev | c.fast << 1 | c.aTest << 4);
     g_cur[7] = (unsigned) (c.nstage | c.ntc << 8); g_cur[8] = (unsigned) c.map[0].fmt; g_cur[9] = (unsigned) (c.map[0].w | c.map[0].h << 16);
     g_cur[10] = c.map[0].linear; g_cur[11] = (unsigned) c.map[0].wrapS;
+    for (int k = 0; k < 6; k++) g_cur[12 + k] = st->bp[0xC0 + k] & 0xFFFFFF;
+    g_cur[18] = st->bp[0x28] & 0xFFFFFF; g_cur[19] = st->bp[0x29] & 0xFFFFFF; g_cur[20] = st->bp[0xF6] & 0xFFFFFF; g_cur[21] = st->bp[0xF7] & 0xFFFFFF;
+    g_cur[22] = (unsigned) (c.map[0].palFmt | c.map[0].palN << 4 | (c.map[0].pal ? 1u << 31 : 0));
+    g_cur[23] = c.map[0].pal ? (unsigned) (c.map[0].pal[0] | (c.map[0].palN > 1 ? c.map[0].pal[1] << 16 : 0)) : st->bp[0x98] & 0xFFFFFF;
     V* t = (V*) malloc(sizeof(V) * (size_t) count);
     if (!t) return;
     for (int i = 0; i < count; i++) ToClip(&v[i], st, &t[i]);
@@ -1077,6 +1082,65 @@ void CopyCmd(unsigned cmd, const XGpState* st)
     }
 }
 
+
+// ---- draw capture: the first draw that takes too long is written to a file (state, vertices, textures, palettes) so the
+// host tool tools/xbox/drawcap_replay.cpp can redraw it and dump the image ----
+const char* g_capPath;
+int g_capDone;
+const unsigned long long CAP_SLOW_US = 900000ull;
+
+unsigned MapBytes(int fmt, int w, int h)
+{
+    int bw, bh, bytes = 32;
+    switch (fmt) {
+    case 0: case 8: bw = 8; bh = 8; break;
+    case 1: case 2: case 9: bw = 8; bh = 4; break;
+    case 0xE: bw = 8; bh = 8; break;
+    case 6: bw = 4; bh = 4; bytes = 64; break;
+    default: bw = 4; bh = 4; break;
+    }
+    return (unsigned) (((w + bw - 1) / bw) * ((h + bh - 1) / bh) * bytes);
+}
+
+void Capture(int prim, const XGpVertex* v, int count, const XGpState* st)
+{
+    if (!g_capPath || g_capDone || count <= 0 || count > 4096) return;
+    g_capDone = 1;
+    FILE* f = fopen(g_capPath, "wb");
+    if (!f) return;
+    Ctx c;
+    Setup(st, &c);
+    unsigned memSize = 0;
+    unsigned char* mem = XGp_MemoryBase(&memSize);
+    unsigned hdr[10] = {0x50414352u /* RCAP */, 1u, (unsigned) prim, (unsigned) count, (unsigned) sizeof(XGpState), (unsigned) sizeof(XGpVertex),
+                        (unsigned) sizeof(PalSlot), (unsigned) g_palUsed, memSize, 0};
+    unsigned used = 0;
+    for (int i = 0; i < c.nstage; i++) if (c.stage[i].needTex && !(used >> c.stage[i].cmap & 1)) used |= 1u << c.stage[i].cmap;
+    hdr[9] = used;
+    fwrite(hdr, sizeof hdr, 1, f);
+    fwrite(st, sizeof(XGpState), 1, f);
+    fwrite(v, sizeof(XGpVertex), (size_t) count, f);
+    fwrite(g_pal, sizeof(PalSlot), (size_t) g_palUsed, f);
+    for (int m = 0; m < 8; m++) {
+        if (!(used >> m & 1)) continue;
+        const Ctx::Map& mp = c.map[m];
+        unsigned off = mp.data && mem ? (unsigned) (mp.data - mem) : 0, len = mp.data ? MapBytes(mp.fmt, mp.w, mp.h) : 0;
+        if (off + len > memSize || len > (4u << 20)) len = 0;
+        unsigned rec[3] = {(unsigned) m, off, len};
+        fwrite(rec, sizeof rec, 1, f);
+        if (len) fwrite(mem + off, 1, len, f);
+    }
+    fclose(f);
+}
+
+extern "C" void XRaster_SetCapture(const char* path) { g_capPath = path; }
+extern "C" void XRaster_SetPalettes(const void* slots, int used, unsigned slotSize)
+{
+    if (slotSize != sizeof(PalSlot) || used < 0 || used > 8) return;
+    memcpy(g_pal, slots, (size_t) used * sizeof(PalSlot));
+    g_palUsed = used;
+}
+
 void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, void* u)
 {
     unsigned long long t0 = g_clock ? g_clock() : 0;
@@ -1088,9 +1152,10 @@ void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, vo
     if (g_clock) {
         unsigned long long dt = g_clock() - t0;
         g_usDraw += dt;
+        if (dt >= CAP_SLOW_US) Capture(prim, v, count, st);
         if (dt / 1000 >= g_slow[0] && dt >= 1000) {
             g_slow[0] = (unsigned) (dt / 1000); g_slow[1] = (unsigned) (g_px - px0); g_slow[2] = (unsigned) count; g_slow[3] = (unsigned) prim;
-            for (int k = 4; k < 12; k++) g_slow[k] = g_cur[k];
+            for (int k = 4; k < 24; k++) g_slow[k] = g_cur[k];
         }
     }
 }
@@ -1208,5 +1273,5 @@ extern "C" void XRaster_Bench(unsigned* us)
 // Diagnostic: the slowest draw since the last call: [0] ms, [1] pixels, [2] vertices, [3] primitive, [4] blend, [5] z, [6] tev/fast/atest, [7] stages/tex sets, [8..] map 0.
 extern "C" void XRaster_Slowest(unsigned* out)
 {
-    for (int k = 0; k < 12; k++) { out[k] = g_slow[k]; g_slow[k] = 0; }
+    for (int k = 0; k < 24; k++) { out[k] = g_slow[k]; g_slow[k] = 0; }
 }
