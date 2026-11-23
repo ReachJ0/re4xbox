@@ -837,6 +837,9 @@ void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, 
     if (!g_pix || count <= 0) return;
     Ctx c;
     Setup(st, &c);
+    g_cur[4] = c.blend; g_cur[5] = (unsigned) (c.zEnable | c.zUpdate << 1 | c.zFunc << 2); g_cur[6] = (unsigned) (c.tev | c.fast << 1 | c.aTest << 4);
+    g_cur[7] = (unsigned) (c.nstage | c.ntc << 8); g_cur[8] = (unsigned) c.map[0].fmt; g_cur[9] = (unsigned) (c.map[0].w | c.map[0].h << 16);
+    g_cur[10] = c.map[0].linear; g_cur[11] = (unsigned) c.map[0].wrapS;
     V* t = (V*) malloc(sizeof(V) * (size_t) count);
     if (!t) return;
     for (int i = 0; i < count; i++) ToClip(&v[i], st, &t[i]);
@@ -941,6 +944,8 @@ void CopyCmd(unsigned cmd, const XGpState* st)
     }
 }
 
+unsigned g_cur[12], g_slow[12];
+
 void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, void* u)
 {
     unsigned long long t0 = g_clock ? g_clock() : 0;
@@ -949,7 +954,14 @@ void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, vo
     g_draws++;
     if (g_px - px0 > g_maxDrawPx) g_maxDrawPx = g_px - px0;
     if (g_px - px0 > 20000) g_bigDraws++;
-    if (g_clock) g_usDraw += g_clock() - t0;
+    if (g_clock) {
+        unsigned long long dt = g_clock() - t0;
+        g_usDraw += dt;
+        if (dt / 1000 >= g_slow[0] && dt >= 1000) {
+            g_slow[0] = (unsigned) (dt / 1000); g_slow[1] = (unsigned) (g_px - px0); g_slow[2] = (unsigned) count; g_slow[3] = (unsigned) prim;
+            for (int k = 4; k < 12; k++) g_slow[k] = g_cur[k];
+        }
+    }
 }
 
 void OnBp(int reg, unsigned val, const XGpState* st, void*)
@@ -1042,4 +1054,10 @@ extern "C" void XRaster_Bench(unsigned* us)
     }
     us[3] = (unsigned) (g_clock() - t);
     free(p); free(z);
+}
+
+// Diagnostic: the slowest draw since the last call: [0] ms, [1] pixels, [2] vertices, [3] primitive, [4] blend, [5] z, [6] tev/fast/atest, [7] stages/tex sets, [8..] map 0.
+extern "C" void XRaster_Slowest(unsigned* out)
+{
+    for (int k = 0; k < 12; k++) { out[k] = g_slow[k]; g_slow[k] = 0; }
 }

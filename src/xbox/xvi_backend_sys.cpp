@@ -384,6 +384,11 @@ static void DrawHud(void)
     static unsigned bn[4];
     static int benched;
     if (!benched) { benched = 1; XRaster_Bench(bn); }
+    unsigned sl[12];
+    XRaster_Slowest(sl);
+    char l6[96];
+    snprintf(l6, sizeof(l6), "slow%ums px%u v%u p%u bl%x z%x t%x s%x f%u %ux%u l%u   ", sl[0], sl[1], sl[2], sl[3], sl[4], sl[5], sl[6], sl[7], sl[8], sl[9] & 0xFFFF,
+             sl[9] >> 16, sl[10]);
     char l5[64];
     snprintf(l5, sizeof(l5), "bench64k st%u rmw%u z%u fl%u us   ", bn[0], bn[1], bn[2], bn[3]);
     pUsD = usD; pUsC = usC; pPx = px; pTr = tr; pDr = dr; pT = now;
@@ -404,6 +409,8 @@ static void DrawHud(void)
     debugPrint("%s", l4);
     debugMoveCursor(24, 432);
     debugPrint("%s", l5);
+    debugMoveCursor(24, 452);
+    debugPrint("%s", l6);
     debugResetCursor();
     Unlock();
 }
