@@ -381,13 +381,17 @@ static void DrawHud(void)
     XRaster_BigDraws(&mx, &big);
     snprintf(l4, sizeof(l4), "dr%u tri%u px%u mx%u big%u   ", (unsigned) (dr - pDr), (unsigned) (tr - pTr), (unsigned) (px - pPx), (unsigned) mx,
              (unsigned) big);
-    unsigned sl[24];
+    unsigned sl[40];
     XRaster_Slowest(sl);
-    char l6[96], l5[96], l7[96];
+    char l6[96], l5[96], l7[96], l8[96];
+    union { float f; unsigned u; } fa, fb, fc, fd;
     snprintf(l6, sizeof(l6), "slow%ums px%u v%u p%u bl%x z%x t%x s%x f%u %ux%u l%u   ", sl[0], sl[1], sl[2], sl[3], sl[4], sl[5], sl[6], sl[7], sl[8], sl[9] & 0xFFFF,
              sl[9] >> 16, sl[10]);
     snprintf(l5, sizeof(l5), "tev %06x %06x %06x %06x %06x %06x   ", sl[12], sl[13], sl[14], sl[15], sl[16], sl[17]);
     snprintf(l7, sizeof(l7), "ord %06x %06x ks %06x %06x pal %08x %08x   ", sl[18], sl[19], sl[20], sl[21], sl[22], sl[23]);
+    fa.u = sl[31]; fb.u = sl[32]; fc.u = sl[37]; fd.u = sl[38];
+    snprintf(l8, sizeof(l8), "m%08x c%x a%08x n%x g%x %x %x v0 %d,%d v2 %d,%d   ", sl[24], sl[25], sl[26], sl[27], sl[28], sl[29], sl[30], (int) fa.f, (int) fb.f, (int) fc.f,
+             (int) fd.f);
     pUsD = usD; pUsC = usC; pPx = px; pTr = tr; pDr = dr; pT = now;
     unsigned reads, btn, anyBtn;
     int ok, err, lx, ly;
@@ -410,6 +414,8 @@ static void DrawHud(void)
     debugPrint("%s", l5);
     debugMoveCursor(24, 448);
     debugPrint("%s", l7);
+    debugMoveCursor(24, 464);
+    debugPrint("%s", l8);
     debugResetCursor();
     Unlock();
 }

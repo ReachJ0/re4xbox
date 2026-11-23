@@ -964,7 +964,7 @@ void Line(const Ctx& c, V a, V b)
     }
 }
 
-unsigned g_cur[24], g_slow[24];
+unsigned g_cur[40], g_slow[40];
 
 void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, void*)
 {
@@ -977,6 +977,10 @@ void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, 
     for (int k = 0; k < 6; k++) g_cur[12 + k] = st->bp[0xC0 + k] & 0xFFFFFF;
     g_cur[18] = st->bp[0x28] & 0xFFFFFF; g_cur[19] = st->bp[0x29] & 0xFFFFFF; g_cur[20] = st->bp[0xF6] & 0xFFFFFF; g_cur[21] = st->bp[0xF7] & 0xFFFFFF;
     g_cur[22] = (unsigned) (c.map[0].palFmt | c.map[0].palN << 4 | (c.map[0].pal ? 1u << 31 : 0));
+    g_cur[24] = st->xf[0x100C]; g_cur[25] = st->xf[0x100E]; g_cur[26] = st->xf[0x100A]; g_cur[27] = st->xf[0x1009]; g_cur[28] = st->xf[0x103F] << 8 | (st->xf[0x1040] & 255);
+    g_cur[29] = st->xf[0x1010]; g_cur[30] = st->xf[0x1041];
+    { union { float f; unsigned u; } q; for (int k = 0; k < 4 && count > 0; k++) { int vi = k < 2 ? 0 : (count > 2 ? 2 : count - 1); float val = k == 0 ? v[vi].pos[0] : k == 1 ? v[vi].pos[1] : k == 2 ? v[vi].pos[0] : v[vi].pos[1]; q.f = val; g_cur[31 + k] = q.u; }
+      q.f = v[0].tex[0][0]; g_cur[35] = q.u; q.f = v[0].tex[0][1]; g_cur[36] = q.u; q.f = count > 2 ? v[2].pos[0] : 0; g_cur[37] = q.u; q.f = count > 2 ? v[2].pos[1] : 0; g_cur[38] = q.u; q.f = count > 2 ? v[2].tex[0][0] : 0; g_cur[39] = q.u; }
     g_cur[23] = c.map[0].pal ? (unsigned) (c.map[0].pal[0] | (c.map[0].palN > 1 ? c.map[0].pal[1] << 16 : 0)) : st->bp[0x98] & 0xFFFFFF;
     V* t = (V*) malloc(sizeof(V) * (size_t) count);
     if (!t) return;
@@ -1232,7 +1236,7 @@ void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, vo
         if (dt >= CAP_SLOW_US) Capture(prim, v, count, st);
         if (dt / 1000 >= g_slow[0] && dt >= 1000) {
             g_slow[0] = (unsigned) (dt / 1000); g_slow[1] = (unsigned) (g_px - px0); g_slow[2] = (unsigned) count; g_slow[3] = (unsigned) prim;
-            for (int k = 4; k < 24; k++) g_slow[k] = g_cur[k];
+            for (int k = 4; k < 40; k++) g_slow[k] = g_cur[k];
         }
     }
 }
@@ -1350,5 +1354,5 @@ extern "C" void XRaster_Bench(unsigned* us)
 // Diagnostic: the slowest draw since the last call: [0] ms, [1] pixels, [2] vertices, [3] primitive, [4] blend, [5] z, [6] tev/fast/atest, [7] stages/tex sets, [8..] map 0.
 extern "C" void XRaster_Slowest(unsigned* out)
 {
-    for (int k = 0; k < 24; k++) { out[k] = g_slow[k]; g_slow[k] = 0; }
+    for (int k = 0; k < 40; k++) { out[k] = g_slow[k]; g_slow[k] = 0; }
 }
