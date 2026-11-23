@@ -214,8 +214,8 @@ void IDSystem::set(ID_FILE_HEADER* data, u8 markNo, ID_CLASS classNo, u8 otType,
     setCk(classNo);
     FlagOnVar(m_set_flag, (u32) ((u8) classNo));
 
-    ver = (int) (f32) strtod((char*) data, 0);
-    sysVer = (int) (f32) strtod("2.00", 0);
+    ver = XIDVER(data);
+    sysVer = XIDSYSVER;
     if (ver < sysVer) {
         OSReport("IDSystem::set(): Dat ver.%d < Sys ver.%d\n", ver, sysVer);
     }

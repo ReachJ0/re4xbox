@@ -48,6 +48,8 @@ void XSub_Convert(void* data, unsigned len);
 #endif
 #define XSUBDATA(adr, len) XSub_Convert((void*) (adr), (unsigned) (len));
 #include "xbox/xidtex_endian.h"
+#define XIDVER(d) ((int) (((const char*) (d))[0] - '0'))
+#define XIDSYSVER 2
 #define XIDARC(arc, texMask, idMask) XIdArc_Swap((void*) (arc), 0, (texMask), (idMask));
 #ifdef __cplusplus
 extern "C" {
@@ -64,6 +66,8 @@ int XMes_Check(const void* tbl, unsigned lang, int type);
 #define SPIN_VSYNC(cond) while (cond) {}
 #define XFRM_DECL
 #define XSUBDATA(adr, len)
+#define XIDVER(d) ((int) (f32) strtod((char*) (d), 0))
+#define XIDSYSVER ((int) (f32) strtod("2.00", 0))
 #define XIDARC(arc, texMask, idMask)
 #define XMESCHK(tbl, lang, type, ret)
 #define XGETEXT_NUM(h, n) (n)
