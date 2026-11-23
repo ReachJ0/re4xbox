@@ -832,6 +832,8 @@ void Line(const Ctx& c, V a, V b)
     }
 }
 
+unsigned g_cur[12], g_slow[12];
+
 void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, void*)
 {
     if (!g_pix || count <= 0) return;
@@ -943,8 +945,6 @@ void CopyCmd(unsigned cmd, const XGpState* st)
         }
     }
 }
-
-unsigned g_cur[12], g_slow[12];
 
 void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, void* u)
 {
