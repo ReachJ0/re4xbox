@@ -18,6 +18,7 @@ int XMes_Swap(void* data, unsigned len);
 // count), [1] length, [2..5] its first four words. Shown by the development heartbeat; all zero if nothing failed.
 extern unsigned XMes_Diag[6];
 extern unsigned XMes_Patched;   // phrases rewritten ("Memory Card" -> "Disc Drive") while converting
+extern unsigned short XMes_Sample[16];   // the first 16 text words of the first converted block (diagnostic)
 
 #ifdef __cplusplus
 }

@@ -397,6 +397,42 @@ static void TestTextures(unsigned char* mem)
     CHECK(R(Px(420, 320)) == 255);                                               // second sub-block row 4 (index 0)
     Dump("tex_cmpr");
 
+    // C8 8x4 with an RGB565 palette (red, green, blue, white), texel index = x % 4; then the palette is changed under the same texture
+    Frame(); Ortho(0.1f, 10); Ident(); TFmt();
+    {
+        unsigned char* pal = t + 0x1000;
+        memset(t, 0, 32);
+        for (int y = 0; y < 4; y++)
+            for (int x = 0; x < 8; x++) t[y * 8 + x] = (unsigned char) (x % 4);
+        memset(pal, 0, 64);
+        unsigned short cols[4] = {0xF800, 0x07E0, 0x001F, 0xFFFF};
+        for (int k = 0; k < 4; k++) { pal[k * 2] = cols[k] >> 8; pal[k * 2 + 1] = cols[k] & 255; }
+        static unsigned long long objbuf[8], tlbuf[8];
+        GXTexObj& obj = *(GXTexObj*) objbuf;
+        GXTlutObj& tl = *(GXTlutObj*) tlbuf;
+        GXInitTlutObj(&tl, pal, GX_TL_RGB565, 16);
+        GXLoadTlut(&tl, GX_TLUT0);
+        GXInitTexObjCI(&obj, t, 8, 4, GX_TF_C8, GX_CLAMP, GX_CLAMP, GX_FALSE, GX_TLUT0);
+        GXInitTexObjLOD(&obj, GX_NEAR, GX_NEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+        GXLoadTexObj(&obj, GX_TEXMAP0);
+        GXSetNumTexGens(1);
+        GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+        GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+        GXSetTevOp(GX_TEVSTAGE0, GX_REPLACE);
+        GXFlush();
+        TexQuad(255, 255, 255, 255);
+        CHECK(R(Px(100, 150)) == 255 && G(Px(100, 150)) == 0);       // x 0 -> red
+        CHECK(G(Px(170, 150)) == 255 && R(Px(170, 150)) == 0);       // x 1 -> green
+        CHECK(B(Px(240, 150)) == 255 && G(Px(240, 150)) == 0);       // x 2 -> blue
+        CHECK(R(Px(270, 150)) == 255 && G(Px(270, 150)) == 255);     // x 3 -> white
+        Dump("tex_c8");
+        pal[0] = 0x07; pal[1] = 0xE0;                                 // colour 0 becomes green: the cache must notice
+        GXLoadTlut(&tl, GX_TLUT0);
+        GXFlush();
+        TexQuad(255, 255, 255, 255);
+        CHECK(G(Px(100, 150)) == 255 && R(Px(100, 150)) == 0);
+    }
+
     // restore the plain vertex-colour state for anything after this
     GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GXSetNumTexGens(0);

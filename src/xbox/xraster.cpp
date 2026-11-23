@@ -130,6 +130,10 @@ struct Ctx {
         const unsigned char* data;
         int fmt, w, h, wrapS, wrapT;
         bool linear;
+        const unsigned short* pal;          // CI formats: palette entries (host order), 0 = none loaded
+        int palN, palFmt;                   // entries available, 0 IA8 / 1 RGB565 / 2 RGB5A3
+        unsigned* px;                       // decoded-texel cache (0 = decode every access)
+        unsigned char* ok;                  // 1 when px[i] holds the texel
     } map[8];
     struct Stage {
         int cmap, ccoord, cchan;            // texture map (or -1), tex coord, raster channel (-1 = zero)
@@ -159,6 +163,75 @@ float Signed11(unsigned v)
     return (float) (v & 0x400 ? (int) v - 0x800 : (int) v);
 }
 
+
+// ---- palettes (GXLoadTlut: BP 0x64 source address, BP 0x65 TMEM offset in 512 byte units and size in 16 entry units) ----
+struct PalSlot {
+    unsigned ofs, n;
+    unsigned short e[1024];
+};
+PalSlot g_pal[8];
+int g_palUsed, g_palNext;
+unsigned g_palSrc;
+
+// ---- decoded texture cache: texels are decoded on first use and kept while the source bytes (and palette) hash the same ----
+struct TexCacheEnt {
+    const unsigned char* data;
+    int fmt, w, h;
+    unsigned sum;
+    unsigned* px;
+    unsigned char* ok;
+    unsigned bytes;
+};
+TexCacheEnt g_tc[16];
+int g_tcNext;
+unsigned g_tcBytes;
+const unsigned TC_BUDGET = 8u << 20;
+
+void PrepMap(Ctx::Map& mp, const unsigned char* lim)
+{
+    mp.px = 0; mp.ok = 0;
+    if (!mp.data || mp.w <= 0 || mp.h <= 0) return;
+    int bw, bh, bytes = 32;
+    switch (mp.fmt) {
+    case 0: case 8: bw = 8; bh = 8; break;
+    case 1: case 2: case 9: bw = 8; bh = 4; break;
+    case 0xE: bw = 8; bh = 8; break;
+    case 6: bw = 4; bh = 4; bytes = 64; break;
+    default: bw = 4; bh = 4; break;
+    }
+    unsigned nbytes = (unsigned) (((mp.w + bw - 1) / bw) * ((mp.h + bh - 1) / bh) * bytes);
+    if (mp.data + nbytes > lim) return;
+    unsigned need = (unsigned) mp.w * (unsigned) mp.h * 5u;
+    if (need > TC_BUDGET) return;
+    unsigned sum = 0x811C9DC5u ^ (unsigned) mp.fmt;
+    const unsigned* wp = (const unsigned*) mp.data;
+    for (unsigned i = 0; i < nbytes / 4; i++) sum = (sum << 5 | sum >> 27) ^ wp[i];
+    if (mp.pal) for (int i = 0; i < mp.palN; i++) sum = (sum << 5 | sum >> 27) ^ mp.pal[i] ^ ((unsigned) mp.palFmt << 16);
+    TexCacheEnt* e = 0;
+    for (int i = 0; i < 16; i++) {
+        TexCacheEnt& c = g_tc[i];
+        if (c.px && c.data == mp.data && c.fmt == mp.fmt && c.w == mp.w && c.h == mp.h) { e = &c; break; }
+    }
+    if (!e) {
+        e = &g_tc[g_tcNext];
+        g_tcNext = (g_tcNext + 1) & 15;
+    }
+    if (!e->px || e->w != mp.w || e->h != mp.h) {
+        if (e->px) { g_tcBytes -= e->bytes; free(e->px); free(e->ok); e->px = 0; e->ok = 0; }
+        if (g_tcBytes + need > TC_BUDGET) return;
+        e->px = (unsigned*) malloc((size_t) mp.w * mp.h * 4);
+        e->ok = (unsigned char*) malloc((size_t) mp.w * mp.h);
+        if (!e->px || !e->ok) { free(e->px); free(e->ok); e->px = 0; e->ok = 0; return; }
+        e->bytes = need;
+        g_tcBytes += need;
+        memset(e->ok, 0, (size_t) mp.w * mp.h);
+        e->sum = sum + 1;
+    }
+    if (e->sum != sum) { memset(e->ok, 0, (size_t) mp.w * mp.h); e->sum = sum; }
+    e->data = mp.data; e->fmt = mp.fmt; e->w = mp.w; e->h = mp.h;
+    mp.px = e->px; mp.ok = e->ok;
+}
+
 void SetupTev(const XGpState* st, Ctx* c)
 {
     unsigned memSize = 0;
@@ -177,6 +250,21 @@ void SetupTev(const XGpState* st, Ctx* c)
         mp.linear = (mode0 >> 4) & 1;
         unsigned off = (img3 & 0x1FFFFFF) << 5;
         mp.data = (mem && off < memSize) ? mem + off : 0;
+        mp.pal = 0; mp.palN = 0; mp.palFmt = 0; mp.px = 0; mp.ok = 0;
+        if (mp.fmt == 8 || mp.fmt == 9) {
+            unsigned tl = st->bp[(m < 4 ? 0x98 : 0xB8) + i];
+            unsigned to = tl & 0x3FF;
+            mp.palFmt = (int) ((tl >> 10) & 3);
+            for (int k = 0; k < g_palUsed; k++) {
+                const PalSlot& ps = g_pal[k];
+                unsigned span = (ps.n + 255) / 256;   // 512 byte units
+                if (to >= ps.ofs && to < ps.ofs + (span ? span : 1)) {
+                    unsigned skip = (to - ps.ofs) * 256;
+                    if (skip < ps.n) { mp.pal = ps.e + skip; mp.palN = (int) (ps.n - skip); }
+                    break;
+                }
+            }
+        }
     }
     c->nstage = (int) ((st->bp[0x00] >> 10) & 15) + 1;
     bool any = false;
@@ -224,6 +312,7 @@ void SetupTev(const XGpState* st, Ctx* c)
         s.needTex = s.cmap >= 0 && (s.ca == 8 || s.ca == 9 || s.cb == 8 || s.cb == 9 || s.cc == 8 || s.cc == 9 ||
                                      s.cd == 8 || s.cd == 9 || s.aa == 4 || s.ab == 4 || s.ac == 4 || s.ad == 4);
         if (s.needTex && s.ccoord + 1 > c->ntc) c->ntc = (s.ccoord & 3) + 1;
+        if (s.needTex) PrepMap(c->map[s.cmap], c->lim);
     }
     {
         const Ctx::Stage& s = c->stage[0];
@@ -349,7 +438,7 @@ void Plot(const Ctx& c, int x, int y, float z, const float* col)
 inline unsigned Be16(const unsigned char* p) { return ((unsigned) p[0] << 8) | p[1]; }
 
 // One texel (level 0) as r g b a in 0..255. `data` is the image, `lim` the end of game memory (bounds).
-void Texel(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o)
+void TexelSlow(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o)
 {
     int bw, bh, bytes = 32;
     switch (m.fmt) {
@@ -413,9 +502,30 @@ void Texel(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o)
         a = b[k]; r = b[k + 1]; g = b[32 + k]; bl = b[32 + k + 1];
         break;
     }
-    case 8: case 9: {   // CI4 / CI8: the palette is not loaded yet, shown as grey
+    case 8: case 9: {   // CI4 / CI8
         int v = m.fmt == 8 ? (b[(iy * 8 + ix) / 2] >> (((iy * 8 + ix) & 1) ? 0 : 4)) & 15 : b[iy * 8 + ix];
-        r = g = bl = (float) (m.fmt == 8 ? v * 17 : v);
+        if (!m.pal) {   // no palette loaded: grey
+            r = g = bl = (float) (m.fmt == 8 ? v * 17 : v);
+            break;
+        }
+        unsigned e = v < m.palN ? m.pal[v] : 0;
+        if (m.palFmt == 0) {          // IA8
+            a = (float) (e >> 8);
+            r = g = bl = (float) (e & 255);
+        } else if (m.palFmt == 1) {   // RGB565
+            r = (float) (((e >> 11) & 31) * 255 / 31);
+            g = (float) (((e >> 5) & 63) * 255 / 63);
+            bl = (float) ((e & 31) * 255 / 31);
+        } else if (e & 0x8000) {      // RGB5A3, opaque
+            r = (float) (((e >> 10) & 31) * 255 / 31);
+            g = (float) (((e >> 5) & 31) * 255 / 31);
+            bl = (float) ((e & 31) * 255 / 31);
+        } else {                      // RGB5A3, translucent
+            a = (float) (((e >> 12) & 7) * 255 / 7);
+            r = (float) (((e >> 8) & 15) * 17);
+            g = (float) (((e >> 4) & 15) * 17);
+            bl = (float) ((e & 15) * 17);
+        }
         break;
     }
     case 0xE: {   // CMPR: four 4x4 DXT1 blocks, order (0,0) (4,0) (0,4) (4,4)
@@ -447,6 +557,27 @@ void Texel(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o)
     default: r = g = bl = 255; break;
     }
     o[0] = r; o[1] = g; o[2] = bl; o[3] = a;
+}
+
+
+inline void Texel(const Ctx::Map& m, int x, int y, const unsigned char* lim, float* o)
+{
+    if (m.px) {
+        int i = y * m.w + x;
+        unsigned v;
+        if (m.ok[i]) {
+            v = m.px[i];
+        } else {
+            float t[4];
+            TexelSlow(m, x, y, lim, t);
+            v = ((unsigned) Clamp8(t[3]) << 24) | ((unsigned) Clamp8(t[0]) << 16) | ((unsigned) Clamp8(t[1]) << 8) | (unsigned) Clamp8(t[2]);
+            m.px[i] = v;
+            m.ok[i] = 1;
+        }
+        o[0] = (float) ((v >> 16) & 255); o[1] = (float) ((v >> 8) & 255); o[2] = (float) (v & 255); o[3] = (float) (v >> 24);
+        return;
+    }
+    TexelSlow(m, x, y, lim, o);
 }
 
 inline int IFloor(float f)
@@ -966,6 +1097,24 @@ void Draw(int prim, int a, const XGpVertex* v, int count, const XGpState* st, vo
 
 void OnBp(int reg, unsigned val, const XGpState* st, void*)
 {
+    if (reg == 0x64) g_palSrc = (val & 0x1FFFFF) << 5;
+    if (reg == 0x65) {
+        unsigned ms = 0;
+        unsigned char* mem = XGp_MemoryBase(&ms);
+        unsigned ofs = val & 0x3FF, n = ((val >> 10) & 0x7FF) * 16;
+        if (n > 1024) n = 1024;
+        if (mem && g_palSrc + n * 2 <= ms && n) {
+            int slot = -1;
+            for (int k = 0; k < g_palUsed; k++) if (g_pal[k].ofs == ofs) slot = k;
+            if (slot < 0) {
+                if (g_palUsed < 8) slot = g_palUsed++;
+                else { slot = g_palNext; g_palNext = (g_palNext + 1) & 7; }
+            }
+            g_pal[slot].ofs = ofs; g_pal[slot].n = n;
+            const unsigned char* src = mem + g_palSrc;
+            for (unsigned k = 0; k < n; k++) g_pal[slot].e[k] = (unsigned short) (src[k * 2] << 8 | src[k * 2 + 1]);
+        }
+    }
     if (reg == 0x52) {
         unsigned long long t0 = g_clock ? g_clock() : 0;
         CopyCmd(val, st);

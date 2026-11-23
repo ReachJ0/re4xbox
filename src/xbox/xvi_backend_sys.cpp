@@ -381,16 +381,16 @@ static void DrawHud(void)
     XRaster_BigDraws(&mx, &big);
     snprintf(l4, sizeof(l4), "dr%u tri%u px%u mx%u big%u   ", (unsigned) (dr - pDr), (unsigned) (tr - pTr), (unsigned) (px - pPx), (unsigned) mx,
              (unsigned) big);
-    static unsigned bn[4];
-    static int benched;
-    if (!benched) { benched = 1; XRaster_Bench(bn); }
     unsigned sl[12];
     XRaster_Slowest(sl);
     char l6[96];
     snprintf(l6, sizeof(l6), "slow%ums px%u v%u p%u bl%x z%x t%x s%x f%u %ux%u l%u   ", sl[0], sl[1], sl[2], sl[3], sl[4], sl[5], sl[6], sl[7], sl[8], sl[9] & 0xFFFF,
              sl[9] >> 16, sl[10]);
-    char l5[64];
-    snprintf(l5, sizeof(l5), "bench64k st%u rmw%u z%u fl%u us   ", bn[0], bn[1], bn[2], bn[3]);
+    char l5[96], l7[96];
+    snprintf(l5, sizeof(l5), "mes p%u %04x %04x %04x %04x %04x %04x %04x %04x %04x %04x ", XMes_Patched, XMes_Sample[0], XMes_Sample[1], XMes_Sample[2],
+             XMes_Sample[3], XMes_Sample[4], XMes_Sample[5], XMes_Sample[6], XMes_Sample[7], XMes_Sample[8], XMes_Sample[9]);
+    snprintf(l7, sizeof(l7), "%04x %04x %04x %04x %04x %04x   ", XMes_Sample[10], XMes_Sample[11], XMes_Sample[12], XMes_Sample[13], XMes_Sample[14],
+             XMes_Sample[15]);
     pUsD = usD; pUsC = usC; pPx = px; pTr = tr; pDr = dr; pT = now;
     unsigned reads, btn, anyBtn;
     int ok, err, lx, ly;
@@ -401,16 +401,18 @@ static void DrawHud(void)
     Lock();
     debugMoveCursor(24, 352);
     debugPrint("%s", l1);
-    debugMoveCursor(24, 372);
+    debugMoveCursor(24, 368);
     debugPrint("%s", l2);
-    debugMoveCursor(24, 392);
+    debugMoveCursor(24, 384);
     debugPrint("%s", l3);
-    debugMoveCursor(24, 412);
+    debugMoveCursor(24, 400);
     debugPrint("%s", l4);
+    debugMoveCursor(24, 416);
+    debugPrint("%s", l6);
     debugMoveCursor(24, 432);
     debugPrint("%s", l5);
-    debugMoveCursor(24, 452);
-    debugPrint("%s", l6);
+    debugMoveCursor(24, 448);
+    debugPrint("%s", l7);
     debugResetCursor();
     Unlock();
 }
