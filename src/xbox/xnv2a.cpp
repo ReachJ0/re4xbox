@@ -55,6 +55,7 @@ struct Stats {
     unsigned tevStages, nvStages, tevOver, biasSkip, constOver, unitOver, noTex, alphaApprox;
     unsigned lastDrawStages;
     unsigned efbNz, snapNz, efbCenter, snapCenter;
+    unsigned copyNz, copyCenter, copyProbes, selfEfb, selfSnap, selfBack;
 } g_s;
 
 CRITICAL_SECTION g_cs;
@@ -776,6 +777,9 @@ void ClearTarget(uint32_t flags, uint32_t argb, uint32_t z24)
     END();
 }
 
+unsigned CountNonBlack(int idx, unsigned* centre);
+void TestTriangle(void);
+
 // ---- XRGpu hooks ----
 void HookDraw(const XRGpuBatch* b, const XRGpuVert* tri, int nverts) { DrawBatch(b, tri, nverts); }
 
@@ -817,6 +821,11 @@ void HookDisplay(int w, int h)
     EnterCriticalSection(&g_cs);
     if (w > g_W) w = g_W;
     if (h > g_H) h = g_H;
+    if ((g_s.copies & 15) == 0) {   // diagnostic: what is in the EFB at the moment the game copies it
+        WaitIdle(500);
+        g_s.copyNz = CountNonBlack(0, &g_s.copyCenter);
+        g_s.copyProbes++;
+    }
     Target(1);
     CopyRect(0, 0, 0, w, h, 0, 0);
     Target(0);
@@ -939,6 +948,20 @@ int XNv2a_Init(void)
     Target(0);
     ClearTarget(0xF3u, 0xFF000000u, 0xFFFFFFu);
     g_on = true;
+    {   // self test of the EFB -> snapshot copy: a triangle in the EFB, copied, both read back
+        Target(0);
+        ClearTarget(0xF3u, 0xFF000000u, 0xFFFFFFu);
+        TestTriangle();
+        Target(1);
+        CopyRect(0, 0, 0, g_W, g_H, 0, 0);
+        Target(0);
+        WaitIdle(1000);
+        const int px = 575, py = 405;   // inside the test triangle
+        g_s.selfEfb = ((const uint32_t*) pb_extra_buffer(0))[(size_t) py * (size_t) (g_pitch / 4) + px];
+        g_s.selfSnap = ((const uint32_t*) pb_extra_buffer(1))[(size_t) py * (size_t) (g_pitch / 4) + px];
+        ClearTarget(0xF3u, 0xFF000000u, 0xFFFFFFu);
+        g_ringPos = 0;
+    }
     return 1;
 }
 
@@ -986,7 +1009,8 @@ void XNv2a_StatsLine(int which, char* out, int n)
                  g_s.texBytes >> 10, g_s.reads, g_s.copies, g_s.clears);
         break;
     case 2:
-        snprintf(out, (size_t) n, "efb nz%u c%08x  snap nz%u c%08x  (grid 32x28)", g_s.efbNz, g_s.efbCenter, g_s.snapNz, g_s.snapCenter);
+        snprintf(out, (size_t) n, "at-copy nz%u c%08x (%u)  efb nz%u  snap nz%u  self e%08x s%08x", g_s.copyNz, g_s.copyCenter, g_s.copyProbes,
+                 g_s.efbNz, g_s.snapNz, g_s.selfEfb, g_s.selfSnap);
         break;
     default:
         snprintf(out, (size_t) n, "gpu stg%u/%u over%u bias%u k%u unit%u notex%u aprx%u TO b%u f%u v%u wr r%u a%u d%u", g_s.nvStages, g_s.tevStages,
