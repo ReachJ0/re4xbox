@@ -427,8 +427,8 @@ void XViBackend_Present(const void* fb, int black, int w, int h)
     char status[96];
 #ifdef RE4_NV2A
     if (XNv2a_Active()) {   // the GPU shows the snapshot of the last GXCopyDisp; the HUD is pbkit text over it
-        static char hud[5][100];
-        const char* ln[5];
+        static char hud[6][100];
+        const char* ln[6];
         unsigned reads; int ok, err, lx, ly; unsigned btn, anyBtn;
         XPad_Dbg(&reads, &ok, &err, &btn, &anyBtn, &lx, &ly);
         s_dbgPresents++;
@@ -436,9 +436,10 @@ void XViBackend_Present(const void* fb, int black, int w, int h)
         snprintf(hud[1], sizeof(hud[1]), "pad r%u ok%d er%d btn%04x any%04x", reads, ok, err, btn, anyBtn);
         XNv2a_StatsLine(0, hud[2], sizeof(hud[2]));
         XNv2a_StatsLine(1, hud[3], sizeof(hud[3]));
-        snprintf(hud[4], sizeof(hud[4]), "vi blk%d %dx%d", black, w, h);
-        for (int i = 0; i < 5; i++) ln[i] = hud[i];
-        XNv2a_Present(black, ln, 5);
+        XNv2a_StatsLine(2, hud[4], sizeof(hud[4]));
+        snprintf(hud[5], sizeof(hud[5]), "vi blk%d %dx%d", black, w, h);
+        for (int i = 0; i < 6; i++) ln[i] = hud[i];
+        XNv2a_Present(black, ln, 6);
         return;
     }
 #endif

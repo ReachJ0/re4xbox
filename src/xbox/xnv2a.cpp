@@ -54,6 +54,7 @@ struct Stats {
     unsigned busyTO, finishTO, vblTO, ringWraps, arenaWraps, dwWraps;
     unsigned tevStages, nvStages, tevOver, biasSkip, constOver, unitOver, noTex, alphaApprox;
     unsigned lastDrawStages;
+    unsigned efbNz, snapNz, efbCenter, snapCenter;
 } g_s;
 
 CRITICAL_SECTION g_cs;
@@ -835,6 +836,39 @@ void WaitVbl(void)
     }
 }
 
+// Diagnostics: how many of a sparse grid of pixels are not black in the EFB (draws reached it) and in the snapshot (GXCopyDisp worked).
+unsigned CountNonBlack(int idx, unsigned* centre)
+{
+    const uint32_t* src = (const uint32_t*) pb_extra_buffer(idx);
+    int pitch = g_pitch / 4, n = 0;
+    for (int j = 0; j < 28; j++)
+        for (int i = 0; i < 32; i++) {
+            int x = 10 + i * 20, y = 8 + j * 16;
+            if (x < g_W && y < g_H && (src[(size_t) y * (size_t) pitch + x] & 0xFFFFFFu)) n++;
+        }
+    *centre = src[(size_t) (g_H / 2) * (size_t) pitch + g_W / 2];
+    return (unsigned) n;
+}
+
+// A gradient triangle drawn through the whole 3D path (vertex program + combiners): if it shows, the pipeline works.
+void TestTriangle(void)
+{
+    XRGpuBatch b;
+    memset(&b, 0, sizeof(b));
+    b.x1 = g_W - 1; b.y1 = g_H - 1;
+    b.zFunc = 7;
+    b.blend = (1u << 3) | (1u << 4);
+    XRGpuVert v[3];
+    memset(v, 0, sizeof(v));
+    const float xy[3][2] = {{560, 400}, {620, 400}, {560, 460}};
+    const float col[3][4] = {{1, 0, 0, 1}, {0, 1, 0, 1}, {0, 0, 1, 1}};
+    for (int i = 0; i < 3; i++) {
+        v[i].x = xy[i][0]; v[i].y = xy[i][1]; v[i].z = 0; v[i].w = 1;
+        for (int k = 0; k < 4; k++) v[i].c[k] = col[i][k];
+    }
+    DrawBatch(&b, v, 3);
+}
+
 }  // namespace
 
 extern "C" {
@@ -916,12 +950,16 @@ void XNv2a_Present(int black, const char* const* lines, int nlines)
     if (!g_on) return;
     EnterCriticalSection(&g_cs);
     MakeRoom(6);
+    WaitIdle(500);
+    g_s.efbNz = CountNonBlack(0, &g_s.efbCenter);
+    g_s.snapNz = CountNonBlack(1, &g_s.snapCenter);
     Target(2);
     ClearTarget(0xF3u, 0xFF000000u, 0xFFFFFFu);
     if (!black && g_snapW > 0 && g_snapH > 0) {
         int dx = (g_W - g_snapW) / 2, dy = (g_H - g_snapH) / 2;
         CopyRect(1, 0, 0, g_snapW, g_snapH, dx < 0 ? 0 : dx, dy < 0 ? 0 : dy);
     }
+    TestTriangle();
     pb_erase_text_screen();
     for (int i = 0; i < nlines; i++) pb_print("%s\n", lines[i]);
     pb_draw_text_screen();
@@ -946,6 +984,9 @@ void XNv2a_StatsLine(int which, char* out, int n)
     case 0:
         snprintf(out, (size_t) n, "gpu dr%u tri%u v%u tex up%u hit%u %uk rb%u cp%u clr%u", g_s.draws, g_s.tris, g_s.verts, g_s.texUp, g_s.texHit,
                  g_s.texBytes >> 10, g_s.reads, g_s.copies, g_s.clears);
+        break;
+    case 2:
+        snprintf(out, (size_t) n, "efb nz%u c%08x  snap nz%u c%08x  (grid 32x28)", g_s.efbNz, g_s.efbCenter, g_s.snapNz, g_s.snapCenter);
         break;
     default:
         snprintf(out, (size_t) n, "gpu stg%u/%u over%u bias%u k%u unit%u notex%u aprx%u TO b%u f%u v%u wr r%u a%u d%u", g_s.nvStages, g_s.tevStages,
