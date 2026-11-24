@@ -12,6 +12,7 @@
 #include <xbox/xgp.h>
 #include <xbox/xmem.h>
 #include <xbox/xraster.h>
+#include <xbox/xrgpu.h>
 
 static int g_checks, g_fails;
 #define CHECK(c) do { g_checks++; if (!(c)) { g_fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -520,6 +521,62 @@ static void Bench(unsigned char* mem)
     printf("bench: GXCopyDisp 640x480 with clear:        %.2f ms\n", (Now() - b) / 5);
 }
 
+// ---- GPU hook: the rasteriser hands finished triangles and the pixel state to a backend instead of drawing ----
+static struct { int draws, verts, reads, clears, displays; XRGpuBatch b; XRGpuVert v[12]; int nv; } g_gp;
+static void FakeDraw(const XRGpuBatch* b, const XRGpuVert* tri, int n)
+{
+    g_gp.draws++; g_gp.verts += n; g_gp.b = *b;
+    g_gp.nv = n > 12 ? 12 : n;
+    memcpy(g_gp.v, tri, sizeof(XRGpuVert) * (size_t) g_gp.nv);
+}
+static void FakeRead(unsigned* d, int stride, int x, int y, int w, int h) { (void) d; (void) stride; (void) x; (void) y; (void) w; (void) h; g_gp.reads++; }
+static void FakeClear(int rgb, int alpha, unsigned argb, int depth, unsigned z) { (void) rgb; (void) alpha; (void) argb; (void) depth; (void) z; g_gp.clears++; }
+static void FakeDisplay(int w, int h) { (void) w; (void) h; g_gp.displays++; }
+static const XRGpu kFakeGpu = {FakeDraw, FakeRead, FakeClear, FakeDisplay, 1};
+
+static void TestGpuHook()
+{
+    Frame(1, GX_LEQUAL);
+    Ortho(0.1f, 10); Ident(); Fmt();
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    GXFlush();
+    XRaster_SetGpu(&kFakeGpu);
+    memset(&g_gp, 0, sizeof(g_gp));
+    Tri(100, 100, 300, 100, 100, 300, -1.0f, 255, 128, 0, 200);
+    CHECK(g_gp.draws == 1 && g_gp.verts == 3);
+    CHECK(Near((int) g_gp.v[0].x, 100, 1) && Near((int) g_gp.v[0].y, 100, 1));
+    CHECK(Near((int) g_gp.v[1].x, 300, 1) && Near((int) g_gp.v[2].y, 300, 1));
+    CHECK(g_gp.v[0].z >= 0 && g_gp.v[0].z <= 16777215.0f && g_gp.v[0].w > 0);
+    CHECK(Near((int) (g_gp.v[0].c[0] * 255), 255, 1) && Near((int) (g_gp.v[0].c[1] * 255), 128, 1) && Near((int) (g_gp.v[0].c[3] * 255), 200, 1));
+    CHECK(g_gp.b.zEnable == 1 && g_gp.b.zFunc == GX_LEQUAL && (g_gp.b.blend & 1));
+    CHECK(g_gp.b.tev && g_gp.b.nstage == 1 && g_gp.b.stage[0].cd == 10);   // PASSCLR: d = rasterised colour
+    CHECK(Px(150, 150) == 0xFF000000u);                                       // nothing drawn on the CPU
+    // quad -> two triangles, a triangle off screen on one side is clipped, a culled one is dropped
+    memset(&g_gp, 0, sizeof(g_gp));
+    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+    V(10, 10, -1.0f, 1, 2, 3); V(60, 10, -1.0f, 1, 2, 3); V(60, 60, -1.0f, 1, 2, 3); V(10, 60, -1.0f, 1, 2, 3);
+    GXEnd();
+    GXFlush();
+    CHECK(g_gp.verts == 6);
+    memset(&g_gp, 0, sizeof(g_gp));
+    GXSetCullMode(GX_CULL_BACK);
+    GXFlush();
+    Tri(100, 100, 100, 200, 200, 100, -1.0f, 9, 9, 9);   // clockwise on screen: one of the two windings is culled
+    Tri(100, 100, 200, 100, 100, 200, -1.0f, 9, 9, 9);
+    CHECK(g_gp.verts == 3);
+    GXSetCullMode(GX_CULL_NONE);
+    GXFlush();
+    memset(&g_gp, 0, sizeof(g_gp));
+    Tri(-100000, 100, 100000, 100, 0, 300, -1.0f, 5, 5, 5);   // huge: the guard band cuts it to a finite polygon
+    CHECK(g_gp.verts >= 3);
+    bool finite = true;
+    for (int i = 0; i < g_gp.nv; i++) if (!(fabsf(g_gp.v[i].x) < 4000 && fabsf(g_gp.v[i].y) < 4000)) finite = false;
+    CHECK(finite);
+    XRaster_SetGpu(0);
+    Tri(100, 100, 300, 100, 100, 300, -1.0f, 255, 128, 0, 255);
+    CHECK(Px(150, 150) != 0xFF000000u);   // back on the CPU
+}
+
 int main()
 {
     void* want = (void*) (uintptr_t) XMEM_WANTED_BASE;
@@ -539,6 +596,7 @@ int main()
     TestLinesPoints();
     TestCopyDisp((unsigned char*) blk);
     TestTextures((unsigned char*) blk);
+    TestGpuHook();
     if (getenv("RASTER_BENCH")) Bench((unsigned char*) blk);
     printf("raster: %d checks, %d failures, %llu triangles\n", g_checks, g_fails, XRaster_Triangles());
     return g_fails != 0;

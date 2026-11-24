@@ -1,0 +1,27 @@
+struct vIn {
+	float4 pos : POSITION;
+	float4 col : DIFFUSE;
+	float4 t0  : TEXCOORD0;
+	float4 t1  : TEXCOORD1;
+	float4 t2  : TEXCOORD2;
+	float4 t3  : TEXCOORD3;
+};
+struct vOut {
+	float4 col : COLOR;
+	float4 pos : POSITION;
+	float4 t0  : TEXCOORD0;
+	float4 t1  : TEXCOORD1;
+	float4 t2  : TEXCOORD2;
+	float4 t3  : TEXCOORD3;
+};
+vOut main(vIn I)
+{
+	vOut r;
+	r.pos = I.pos;
+	r.col = I.col;
+	r.t0 = I.t0;
+	r.t1 = I.t1;
+	r.t2 = I.t2;
+	r.t3 = I.t3;
+	return r;
+}

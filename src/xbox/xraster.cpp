@@ -1,5 +1,6 @@
 // Software rasterizer behind XGpBackend, see include/xbox/xraster.h.
 #include "xbox/xraster.h"
+#include "xbox/xrgpu.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +9,7 @@
 namespace {
 
 unsigned* g_pix;
+const XRGpu* g_gpu;   // when set, pixels are drawn by the GPU backend (see xrgpu.h)
 unsigned* g_z;
 unsigned long long g_tris;
 unsigned long long g_px, g_usDraw, g_usCopy, g_draws;   // statistics for the development HUD
@@ -135,6 +137,7 @@ struct Ctx {
         int palN, palFmt;                   // entries available, 0 IA8 / 1 RGB565 / 2 RGB5A3
         unsigned* px;                       // decoded-texel cache (0 = decode every access)
         unsigned char* ok;                  // 1 when px[i] holds the texel
+        unsigned ver;                       // content hash of the cached texture (changes when the source bytes change)
     } map[8];
     struct Stage {
         int cmap, ccoord, cchan;            // texture map (or -1), tex coord, raster channel (-1 = zero)
@@ -235,7 +238,7 @@ void PrepMap(Ctx::Map& mp, const unsigned char* lim)
     }
     if (e->sum != sum) { memset(e->ok, 0, (size_t) mp.w * mp.h); e->sum = sum; e->full = false; }
     e->data = mp.data; e->fmt = mp.fmt; e->w = mp.w; e->h = mp.h;
-    mp.px = e->px; mp.ok = e->ok;
+    mp.px = e->px; mp.ok = e->ok; mp.ver = e->sum;
     // small textures are decoded completely at once, so every access is a single load (ok == 0 means "all decoded")
     if (mp.w * mp.h <= 131072 && e->full) {
         mp.ok = 0;
@@ -273,7 +276,7 @@ void SetupTev(const XGpState* st, Ctx* c)
         mp.linear = (mode0 >> 4) & 1;
         unsigned off = (img3 & 0x1FFFFFF) << 5;
         mp.data = (mem && off < memSize) ? mem + off : 0;
-        mp.pal = 0; mp.palN = 0; mp.palFmt = 0; mp.px = 0; mp.ok = 0;
+        mp.pal = 0; mp.palN = 0; mp.palFmt = 0; mp.px = 0; mp.ok = 0; mp.ver = 0;
         if (mp.fmt == 8 || mp.fmt == 9) {
             unsigned tl = st->bp[(m < 4 ? 0x98 : 0xB8) + i];
             unsigned to = tl & 0x3FF;
@@ -1281,6 +1284,169 @@ void Line(const Ctx& c, V a, V b)
     }
 }
 
+
+// ---- GPU path: the same transform / clip / cull as the software path, the pixels are left to the backend ----
+// Every texture the TEV samples is decoded completely (the backend uploads it as a whole).
+void FullDecode(Ctx::Map& mp, const unsigned char* lim)
+{
+    if (!mp.px || !mp.ok) return;
+    for (int y = 0; y < mp.h; y++)
+        for (int x = 0; x < mp.w; x++) TexelPx(mp, x, y, lim);
+}
+
+// Guard band: the GPU rasteriser handles window coordinates in a limited range, so polygons are cut to +-GPU_GUARD pixels
+// around the EFB (a linear function of clip x, w or y, w, so Lerp stays exact).
+const float GPU_GUARD_LO = -1024.0f, GPU_GUARD_HI = 2048.0f;
+
+int ClipGuard(const V* in, int n, V* out, const XGpState* st)
+{
+    const unsigned* vp = st->xf + 0x101A;
+    float a[2] = {F(vp[0]), F(vp[1])};
+    float b[2] = {F(vp[3]) - 342.0f, F(vp[4]) - 342.0f};
+    V s[12], t[12];
+    int na = n, nb;
+    memcpy(s, in, n * sizeof(V));
+    for (int plane = 0; plane < 4; plane++) {
+        int ax = plane >> 1;                   // 0: x, 1: y
+        bool low = (plane & 1) == 0;
+        nb = 0;
+        for (int i = 0; i < na; i++) {
+            const V& cur = s[i];
+            const V& nxt = s[(i + 1) % na];
+            float cc = ax ? cur.cy : cur.cx, cn = ax ? nxt.cy : nxt.cx;
+            float dc, dn;
+            if (low) { dc = a[ax] * cc + (b[ax] - GPU_GUARD_LO) * cur.cw; dn = a[ax] * cn + (b[ax] - GPU_GUARD_LO) * nxt.cw; }
+            else { dc = (GPU_GUARD_HI - b[ax]) * cur.cw - a[ax] * cc; dn = (GPU_GUARD_HI - b[ax]) * nxt.cw - a[ax] * cn; }
+            if (dc >= 0) t[nb++] = cur;
+            if ((dc >= 0) != (dn >= 0)) t[nb++] = Lerp(cur, nxt, dc / (dc - dn));
+        }
+        if (nb == 0) return 0;
+        memcpy(s, t, nb * sizeof(V));
+        na = nb;
+    }
+    memcpy(out, s, na * sizeof(V));
+    return na;
+}
+
+struct GpuOut {
+    XRGpuVert* v;
+    int n, cap;
+};
+GpuOut g_go;
+unsigned long long g_gpuTris;
+
+void GpuFlush(const XRGpuBatch* b)
+{
+    if (g_go.n > 0) g_gpu->draw(b, g_go.v, g_go.n);
+    g_go.n = 0;
+}
+
+void GpuPush(const XRGpuBatch* b, const V& p)
+{
+    if (g_go.n + 1 > g_go.cap) {
+        int nc = g_go.cap ? g_go.cap * 2 : 3072;
+        XRGpuVert* nv = (XRGpuVert*) realloc(g_go.v, sizeof(XRGpuVert) * (size_t) nc);
+        if (!nv) { g_go.n = 0; return; }
+        g_go.v = nv;
+        g_go.cap = nc;
+    }
+    XRGpuVert& o = g_go.v[g_go.n++];
+    o.x = p.sx; o.y = p.sy;
+    o.z = p.sz < 0 ? 0 : p.sz > 16777215.0f ? 16777215.0f : p.sz;
+    o.w = p.cw;
+    for (int i = 0; i < 4; i++) o.c[i] = p.col[i] * (1.0f / 255.0f);
+    for (int t = 0; t < 4; t++) { o.tc[t][0] = p.tc[t][0]; o.tc[t][1] = p.tc[t][1]; }
+    (void) b;
+}
+
+void GpuTri(const Ctx& c, const XRGpuBatch* b, const V& a, const V& bb, const V& d)
+{
+    V in[3] = {a, bb, d}, poly[10], g[16];
+    int n = ClipPoly(in, 3, poly);
+    if (n < 3) return;
+    n = ClipGuard(poly, n, g, c.st);
+    if (n < 3) return;
+    for (int i = 0; i < n; i++) Project(&g[i], c.st);
+    for (int i = 1; i + 1 < n; i++) {
+        const V& p0 = g[0];
+        const V& p1 = g[i];
+        const V& p2 = g[i + 1];
+        float area = (p1.sx - p0.sx) * (p2.sy - p0.sy) - (p2.sx - p0.sx) * (p1.sy - p0.sy);
+        if (area == 0 || !(fabsf(area) < 1e12f)) continue;
+        bool front = area < 0;   // same convention as FillTri
+        if (c.cull == 3 || (c.cull == 1 && !front) || (c.cull == 2 && front)) continue;
+        GpuPush(b, p0); GpuPush(b, p1); GpuPush(b, p2);
+        g_gpuTris++;
+    }
+}
+
+void GpuBuild(const Ctx& c, XRGpuBatch* b)
+{
+    b->x0 = c.x0; b->y0 = c.y0; b->x1 = c.x1; b->y1 = c.y1;
+    b->zEnable = c.zEnable; b->zFunc = c.zFunc; b->zUpdate = c.zUpdate; b->blend = c.blend;
+    b->aTest = c.aTest; b->acomp0 = c.acomp0; b->acomp1 = c.acomp1; b->alogic = c.alogic; b->aref0 = c.aref0; b->aref1 = c.aref1;
+    b->tev = c.tev; b->nstage = c.nstage;
+    for (int i = 0; i < 16; i++) {
+        const Ctx::Stage& s = c.stage[i];
+        XRGpuStage& o = b->stage[i];
+        o.cmap = s.cmap; o.ccoord = s.ccoord; o.cchan = s.cchan;
+        o.ca = s.ca; o.cb = s.cb; o.cc = s.cc; o.cd = s.cd; o.cbias = s.cbias; o.cop = s.cop; o.cclamp = s.cclamp; o.cscale = s.cscale; o.cdest = s.cdest;
+        o.aa = s.aa; o.ab = s.ab; o.ac = s.ac; o.ad = s.ad; o.abias = s.abias; o.aop = s.aop; o.aclamp = s.aclamp; o.ascale = s.ascale; o.adest = s.adest;
+        for (int k = 0; k < 3; k++) o.kcv[k] = s.kcv[k];
+        o.kav = s.kav;
+        o.needTex = s.needTex;
+    }
+    memcpy(b->reg, c.reg, sizeof(b->reg));
+    for (int m = 0; m < 8; m++) {
+        XRGpuTex& t = b->tex[m];
+        const Ctx::Map& mp = c.map[m];
+        bool used = false;
+        for (int i = 0; i < c.nstage; i++) if (c.stage[i].needTex && c.stage[i].cmap == m) used = true;
+        t.px = used ? mp.px : 0;
+        t.w = mp.w; t.h = mp.h;
+        t.id = (unsigned) (size_t) mp.px; t.ver = mp.ver;
+        t.wrapS = mp.wrapS; t.wrapT = mp.wrapT; t.linear = mp.linear;
+    }
+}
+
+void GpuDraw(int prim, const XGpVertex* v, int count, const XGpState* st, Ctx& c)
+{
+    for (int i = 0; i < c.nstage; i++) {
+        const Ctx::Stage& s = c.stage[i];
+        if (s.needTex && s.cmap >= 0) FullDecode(c.map[s.cmap], c.lim);
+    }
+    XRGpuBatch* b = (XRGpuBatch*) malloc(sizeof(XRGpuBatch));
+    V* t = (V*) malloc(sizeof(V) * (size_t) count);
+    if (!b || !t) { free(b); free(t); return; }
+    GpuBuild(c, b);
+    for (int i = 0; i < count; i++) ToClip(&v[i], st, &t[i]);
+    g_go.n = 0;
+    switch (prim) {
+    case XGP_QUADS:
+        for (int i = 0; i + 3 < count; i += 4) {
+            GpuTri(c, b, t[i], t[i + 1], t[i + 2]);
+            GpuTri(c, b, t[i], t[i + 2], t[i + 3]);
+        }
+        break;
+    case XGP_TRIANGLES:
+        for (int i = 0; i + 2 < count; i += 3) GpuTri(c, b, t[i], t[i + 1], t[i + 2]);
+        break;
+    case XGP_TRISTRIP:
+        for (int i = 0; i + 2 < count; i++) {
+            if (i & 1) GpuTri(c, b, t[i + 1], t[i], t[i + 2]);
+            else GpuTri(c, b, t[i], t[i + 1], t[i + 2]);
+        }
+        break;
+    case XGP_TRIFAN:
+        for (int i = 1; i + 1 < count; i++) GpuTri(c, b, t[0], t[i], t[i + 1]);
+        break;
+    default: break;   // lines and points are not drawn by the GPU path yet
+    }
+    GpuFlush(b);
+    free(t);
+    free(b);
+}
+
 unsigned g_cur[40], g_slow[40];
 
 void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, void*)
@@ -1299,6 +1465,7 @@ void DrawImpl(int prim, int, const XGpVertex* v, int count, const XGpState* st, 
     { union { float f; unsigned u; } q; for (int k = 0; k < 4 && count > 0; k++) { int vi = k < 2 ? 0 : (count > 2 ? 2 : count - 1); float val = k == 0 ? v[vi].pos[0] : k == 1 ? v[vi].pos[1] : k == 2 ? v[vi].pos[0] : v[vi].pos[1]; q.f = val; g_cur[31 + k] = q.u; }
       q.f = v[0].tex[0][0]; g_cur[35] = q.u; q.f = v[0].tex[0][1]; g_cur[36] = q.u; q.f = count > 2 ? v[2].pos[0] : 0; g_cur[37] = q.u; q.f = count > 2 ? v[2].pos[1] : 0; g_cur[38] = q.u; q.f = count > 2 ? v[2].tex[0][0] : 0; g_cur[39] = q.u; }
     g_cur[23] = c.map[0].pal ? (unsigned) (c.map[0].pal[0] | (c.map[0].palN > 1 ? c.map[0].pal[1] << 16 : 0)) : st->bp[0x98] & 0xFFFFFF;
+    if (g_gpu) { GpuDraw(prim, v, count, st, c); return; }
     V* t = (V*) malloc(sizeof(V) * (size_t) count);
     if (!t) return;
     for (int i = 0; i < count; i++) ToClip(&v[i], st, &t[i]);
@@ -1425,8 +1592,30 @@ void CopyTexture(unsigned cmd, const XGpState* st)
 void CopyCmd(unsigned cmd, const XGpState* st)
 {
     if (!g_pix) return;
-    if (!((cmd >> 14) & 1)) CopyTexture(cmd, st);
-    if ((cmd >> 14) & 1) {
+    if (!((cmd >> 14) & 1)) {
+        if (g_gpu) {   // the EFB lives on the GPU: bring the copied rectangle into g_pix first
+            unsigned src = st->bp[0x49], size = st->bp[0x4A];
+            int x0 = (int) (src & 0x3FF), y0 = (int) ((src >> 10) & 0x3FF);
+            int w = (int) (size & 0x3FF) + 1, h = (int) ((size >> 10) & 0x3FF) + 1;
+            if (x0 + w <= XRASTER_W && y0 + h <= XRASTER_H) g_gpu->readback(g_pix + y0 * XRASTER_W + x0, XRASTER_W, x0, y0, w, h);
+        }
+        CopyTexture(cmd, st);
+    }
+    bool gpuNoXfb = false;
+    if (((cmd >> 14) & 1) && g_gpu) {
+        unsigned size = st->bp[0x4A];
+        int w = (int) (size & 0x3FF) + 1, h = (int) ((size >> 10) & 0x3FF) + 1;
+        if (w > XRASTER_W) w = XRASTER_W;
+        if (h > XRASTER_H) h = XRASTER_H;
+        g_gpu->display(w, h);
+        if (g_gpu->noXfb) {
+            g_copySerial++;
+            gpuNoXfb = true;
+        } else {
+            g_gpu->readback(g_pix, XRASTER_W, 0, 0, w, h);
+        }
+    }
+    if (((cmd >> 14) & 1) && !gpuNoXfb) {
         unsigned memSize = 0;
         unsigned char* mem = XGp_MemoryBase(&memSize);
         unsigned src = st->bp[0x49], size = st->bp[0x4A];
@@ -1469,6 +1658,10 @@ void CopyCmd(unsigned cmd, const XGpState* st)
         unsigned argb = ((c0 >> 8) & 255) << 24 | (c0 & 255) << 16 | ((c1 >> 8) & 255) << 8 | (c1 & 255);
         // the SDK widens the colour / depth masks of the clear through BP 0x40 / 0x41 first; honour them
         bool clrColor = (st->bp[0x41] >> 3) & 1, clrAlpha = (st->bp[0x41] >> 4) & 1, clrZ = (st->bp[0x40] >> 4) & 1;
+        if (g_gpu) {
+            g_gpu->clear(clrColor, clrAlpha, argb, clrZ, z);
+            return;
+        }
         for (int i = 0; i < XRASTER_W * XRASTER_H; i++) {
             unsigned o = g_pix[i];
             unsigned n = argb;
@@ -1600,6 +1793,7 @@ extern "C" void XRaster_Init(void)
 }
 
 extern "C" const XGpBackend* XRaster_Backend(void) { return &g_be; }
+extern "C" void XRaster_SetGpu(const XRGpu* gpu) { g_gpu = gpu; }
 
 extern "C" void XRaster_Clear(unsigned argb, float z24)
 {

@@ -18,6 +18,7 @@
 #include "xbox/xgp.h"
 #include "xbox/xmes_endian.h"
 #include "xbox/xraster.h"
+#include "xbox/xnv2a.h"
 #include <xboxkrnl/xboxkrnl.h>
 
 extern "C" {
@@ -424,6 +425,23 @@ static void DrawHud(void)
 void XViBackend_Present(const void* fb, int black, int w, int h)
 {
     char status[96];
+#ifdef RE4_NV2A
+    if (XNv2a_Active()) {   // the GPU shows the snapshot of the last GXCopyDisp; the HUD is pbkit text over it
+        static char hud[5][100];
+        const char* ln[5];
+        unsigned reads; int ok, err, lx, ly; unsigned btn, anyBtn;
+        XPad_Dbg(&reads, &ok, &err, &btn, &anyBtn, &lx, &ly);
+        s_dbgPresents++;
+        snprintf(hud[0], sizeof(hud[0]), "RE4 NV2A fr%u build %s card %08x", (unsigned) s_dbgPresents, XBuildId, s_cardStatus);
+        snprintf(hud[1], sizeof(hud[1]), "pad r%u ok%d er%d btn%04x any%04x", reads, ok, err, btn, anyBtn);
+        XNv2a_StatsLine(0, hud[2], sizeof(hud[2]));
+        XNv2a_StatsLine(1, hud[3], sizeof(hud[3]));
+        snprintf(hud[4], sizeof(hud[4]), "vi blk%d %dx%d", black, w, h);
+        for (int i = 0; i < 5; i++) ln[i] = hud[i];
+        XNv2a_Present(black, ln, 5);
+        return;
+    }
+#endif
 #ifdef RE4_DEBUGSCREEN
     static unsigned s_shownSerial = 0xFFFFFFFFu;
     static const void* s_shownFb;

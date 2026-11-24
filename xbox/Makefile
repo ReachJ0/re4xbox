@@ -10,7 +10,7 @@ RE4 := $(abspath $(CURDIR)/..)
 NXDK_CXX = y
 NXDK_SDL = y
 
-LAYERS := audio_stubs chp_xbox gp_xbox xraster gx_xbox vi_xbox xvi_backend_sys ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xbox thread_xbox \
+LAYERS := audio_stubs chp_xbox gp_xbox xraster xnv2a gx_xbox vi_xbox xvi_backend_sys ar_xbox cache_xbox card_xbox dvd_xbox link_xbox os_xbox pad_xbox ps_xbox thread_xbox \
           xcard_backend_file xcrash_sys xsnd_endian xtex_endian xarc_endian xmes_endian xdataext xidtex_endian xdvd_backend_file xmem_xbox xos_backend_sys xpad_backend_sdl xthread_backend_sys
 SDK_C  := GXAttr GXBump GXDisplayList GXDraw GXFifo GXFrameBuf GXGeometry GXInit GXLight GXMisc GXPerf GXPixel GXTev GXTexture GXTransform texPalette fileCache OSAlloc OSArena OSStopwatch OSThread OSMutex OSSemaphore
 
@@ -26,7 +26,7 @@ SRCS = $(CURDIR)/main.cpp $(addprefix $(RE4)/src/game/,$(addsuffix .cpp,$(GAME))
 
 # what the sources of the game expect. They apply to OUR objects only: a global CFLAGS would also reach nxdk's own
 # libraries (its crt0 would then call re4_main instead of main) when they are built in the same make run.
-RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing $(if $(RUN_GAME),-DRE4_RUN_GAME) $(if $(DEBUGSCREEN),-DRE4_DEBUGSCREEN)
+RE4_DEFS = -Dmain=re4_main -DRE4_XBOX -DNXDK -Wno-c++11-narrowing $(if $(RUN_GAME),-DRE4_RUN_GAME) $(if $(DEBUGSCREEN),-DRE4_DEBUGSCREEN) $(if $(NV2A),-DRE4_NV2A)
 RE4_INC  = -I$(RE4)/include -I$(RE4)/src/lib
 RE4_OBJS = $(addsuffix .obj,$(basename $(SRCS)))
 $(RE4_OBJS): CFLAGS   += $(RE4_DEFS) $(RE4_INC) -w

@@ -130,3 +130,18 @@ El juego de GameCube son dos discos (id de disco 0 / 1) y pide el cambio él mis
 `DVDChangeDiskAsync` llama a `XDvdBackend_SetDisc(n)` y el backend sirve `D:\disc1\` o `D:\disc2\` si esas carpetas existen
 (si no, usa `D:\` para los dos, como antes). Al arrancar se usa el disco 1. Para el ISO: copiar el contenido de cada disco en
 `xbox/bin/disc1/` y `xbox/bin/disc2/`. Sin verificar en xemu; probado en host (`run_dvd_test.sh`).
+
+## Dibujado con la NV2A (`NV2A=1`)
+
+`make -C xbox RUN_GAME=1 NV2A=1` (sin `DEBUGSCREEN`) hace que los píxeles los dibuje la GPU. Sin `NV2A=1` todo sigue por software.
+
+- `xraster.cpp` sigue haciendo en la CPU lo que ya hacía bien: transformar, recortar (near/far y una banda de guarda de ±1024..2048 px), culling,
+  decodificar texturas GX a ARGB y codificar las copias del EFB. Con un backend GPU (`XRaster_SetGpu`, `include/xbox/xrgpu.h`) en lugar de rellenar
+  píxeles entrega triángulos terminados (coordenadas de ventana, z de 24 bits, w de clip) y el estado de píxel (TEV, blend, z, alpha, scissor).
+- `src/xbox/xnv2a.cpp` (pbkit) los dibuja: vertex program de paso (`tools/xbox/shaders/gx.vs.cg`, compilado con vp20compiler), etapas TEV -> combiners
+  generales (una etapa TEV = 1 o 2 combiners; bias -0.5, escalas x1/x2/x4/x0.5; máx. 8 combiners y 4 unidades de textura por draw), texturas subidas
+  swizzled en potencia de dos con caché por contenido, blend/z/alpha test/máscara de color/scissor en sus registros NV097.
+- El EFB es el extra buffer 0 de pbkit. `GXCopyDisp` lo renderiza al extra buffer 1 (instantánea); el retrace de VI dibuja la instantánea en el back buffer,
+  imprime el HUD (texto de pbkit) y hace el swap. `GXCopyTex` lee el EFB de vuelta a la CPU y lo codifica como antes.
+- Sin hacer todavía: texgen/iluminación (igual que en software), bias +0.5, líneas y puntos, mipmaps, copias de profundidad. Sin verificar en xemu ni en
+  hardware: el HUD muestra contadores (`gpu dr.. tri.. tex up.. hit..`, `stg.. over.. TO b.. f.. v..`) para ver qué hizo la GPU.

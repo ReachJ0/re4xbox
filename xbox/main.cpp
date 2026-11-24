@@ -8,6 +8,7 @@
 #include "xbox/xtrace.h"
 #include "xbox/xgp.h"
 #include "xbox/xraster.h"
+#include "xbox/xnv2a.h"
 #include "xbox/xvi_backend.h"
 #include <nxdk/mount.h>
 
@@ -30,6 +31,9 @@ int main(void)
     XRaster_Init();                         // software GX drawing: primitives go to the EFB, GXCopyDisp fills the XFB
     XGp_SetBackend(XRaster_Backend());
     XRaster_SetClock(XViBackend_NowUs);
+#ifdef RE4_NV2A
+    if (XNv2a_Init()) XRaster_SetGpu(XNv2a_Gpu());   // pixels drawn by the NV2A; if it cannot start, the software rasteriser stays
+#endif
     if (nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\")) XRaster_SetCapture("E:\\drawcap.bin");   // diagnostic: first slow draw -> E:\drawcap.bin
     XTrace_Add("calling re4_main\n");
     re4_main();
